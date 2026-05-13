@@ -1,6 +1,8 @@
 import { CopilotClient, approveAll, defineTool, type CopilotSession } from "@github/copilot-sdk";
 import { openFrameStore, type JsonValue, type ToolRegistryEntry, type Frame } from "./db";
 
+const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 interface SearchDocsArgs {
   query: string;
 }
@@ -164,7 +166,10 @@ export async function runAgentDemo(prompt: string): Promise<AgentDemoResult> {
     });
 
     activeSessionId = session.sessionId;
-    const assistantMessage = await session.sendAndWait({ prompt });
+    const assistantMessage = await session.sendAndWait(
+      { prompt },
+      SESSION_IDLE_TIMEOUT_MS,
+    );
     const assistantResponse = assistantMessage?.data.content ?? null;
 
     return {

@@ -8,6 +8,8 @@ import {
 import { createSearchDocsTool } from "./agent";
 import { openFrameStore, type Frame, type JsonValue, type ToolRegistryEntry } from "./db";
 
+const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 interface ReplayPrompt {
   frameId: number;
   prompt: string;
@@ -272,7 +274,10 @@ export async function runReplay(sessionId: string): Promise<ReplayResult> {
     const assistantResponses: Array<string | null> = [];
 
     for (const replayPrompt of replayPrompts) {
-      const assistantMessage = await session.sendAndWait({ prompt: replayPrompt.prompt });
+      const assistantMessage = await session.sendAndWait(
+        { prompt: replayPrompt.prompt },
+        SESSION_IDLE_TIMEOUT_MS,
+      );
       assistantResponses.push(assistantMessage?.data.content ?? null);
     }
 
@@ -507,7 +512,10 @@ export async function runFork(
 
     cloneFramesIntoFork(db, forkScopeFrames, forkSessionId, originalSessionId, startFrameId);
 
-    const assistantMessage = await session.sendAndWait({ prompt: newPrompt });
+    const assistantMessage = await session.sendAndWait(
+      { prompt: newPrompt },
+      SESSION_IDLE_TIMEOUT_MS,
+    );
 
     return {
       originalSessionId,
