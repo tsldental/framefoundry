@@ -11,6 +11,8 @@ function App() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingFrames, setIsLoadingFrames] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedSession =
+    sessions.find((session) => session.sessionId === selectedSessionId) ?? null;
 
   useEffect(() => {
     void loadSessions();
@@ -165,6 +167,7 @@ function App() {
           />
           <FrameTimeline
             sessionId={selectedSessionId}
+            session={selectedSession}
             frames={frames}
             isLoading={isLoadingFrames}
             selectedFrameId={selectedFrameId}

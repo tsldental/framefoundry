@@ -106,6 +106,11 @@ export interface SessionSummary {
   parentSessionId: string | null;
   branchRootFrameId: number | null;
   createdAt: string;
+  lastUpdatedAt: string;
+  frameCount: number;
+  childCount: number;
+  headline: string;
+  latestSummary: string;
 }
 
 export interface ToolRegistryEntry {
@@ -360,7 +365,27 @@ export class FrameStore {
 
   listSessions(): SessionSummary[] {
     const rows = this.selectSessionsStatement.all() as SessionSummaryRow[];
-    return rows.map(mapSessionSummaryRow);
+    const summaries = rows.map((row) => {
+      const frames = this.listFrames(row.session_id);
+      return mapSessionSummaryRow(row, frames);
+    });
+    const childCounts = new Map<string, number>();
+
+    for (const summary of summaries) {
+      if (!summary.parentSessionId) {
+        continue;
+      }
+
+      childCounts.set(
+        summary.parentSessionId,
+        (childCounts.get(summary.parentSessionId) ?? 0) + 1,
+      );
+    }
+
+    return summaries.map((summary) => ({
+      ...summary,
+      childCount: childCounts.get(summary.sessionId) ?? 0,
+    }));
   }
 
   getRegistryEntry(toolCallId: string): ToolRegistryEntry | null {
@@ -537,11 +562,82 @@ function mapToolRegistryEntryRow(row: ToolRegistryEntryRow): ToolRegistryEntry {
   };
 }
 
-function mapSessionSummaryRow(row: SessionSummaryRow): SessionSummary {
+function mapSessionSummaryRow(row: SessionSummaryRow, frames: Frame[]): SessionSummary {
+  const latestFrame = frames.at(-1) ?? null;
+
   return {
     sessionId: row.session_id,
     parentSessionId: row.parent_session_id,
     branchRootFrameId: row.branch_root_frame_id,
     createdAt: row.created_at,
+    lastUpdatedAt: latestFrame?.createdAt ?? row.created_at,
+    frameCount: frames.length,
+    childCount: 0,
+    headline: summarizeSessionHeadline(frames, row.branch_root_frame_id),
+    latestSummary: summarizeLatestFrame(latestFrame),
   };
+}
+
+function summarizeSessionHeadline(frames: Frame[], branchRootFrameId: number | null): string {
+  const firstUserTurn = frames.find((frame) => frame.frameType === "llm_turn" && frame.role === "user");
+
+  if (firstUserTurn) {
+    return truncateString(extractStringFromFrameContent(firstUserTurn), 72);
+  }
+
+  if (branchRootFrameId !== null) {
+    return `Forked from frame #${branchRootFrameId}`;
+  }
+
+  return "Recorded session";
+}
+
+function summarizeLatestFrame(frame: Frame | null): string {
+  if (!frame) {
+    return "No frames recorded";
+  }
+
+  if (frame.frameType === "llm_turn") {
+    const prefix = frame.role === "assistant" ? "Assistant" : frame.role === "user" ? "User" : "Turn";
+    return `${prefix}: ${truncateString(extractStringFromFrameContent(frame), 96)}`;
+  }
+
+  if (frame.frameType === "tool_call") {
+    return `Tool call: ${frame.toolName ?? "unknown tool"}`;
+  }
+
+  if (frame.frameType === "tool_result") {
+    return `Tool result: ${truncateString(stringifyJson(extractObjectField(frame.content, "result")), 96)}`;
+  }
+
+  return `System: ${truncateString(stringifyJson(frame.content), 96)}`;
+}
+
+function extractStringFromFrameContent(frame: Frame): string {
+  if (typeof frame.content !== "object" || frame.content === null || Array.isArray(frame.content)) {
+    return stringifyJson(frame.content);
+  }
+
+  const content = frame.content.content;
+  return typeof content === "string" ? content : stringifyJson(content ?? frame.content);
+}
+
+function extractObjectField(value: JsonValue, fieldName: string): JsonValue {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+
+  return value[fieldName] ?? null;
+}
+
+function stringifyJson(value: JsonValue): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function truncateString(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength - 3)}...`;
 }

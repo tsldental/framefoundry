@@ -26,6 +26,11 @@ export interface SessionSummary {
   parentSessionId: string | null;
   branchRootFrameId: number | null;
   createdAt: string;
+  lastUpdatedAt: string;
+  frameCount: number;
+  childCount: number;
+  headline: string;
+  latestSummary: string;
 }
 
 export interface SessionsResponse {

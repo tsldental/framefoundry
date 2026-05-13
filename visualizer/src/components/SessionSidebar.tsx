@@ -56,7 +56,7 @@ export function SessionSidebar({
       ) : sessions.length === 0 ? (
         <p className="text-sm text-slate-400">No sessions recorded yet.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {sessionTree.map((node) => (
             <SessionTreeItem
               key={node.sessionId}
@@ -96,8 +96,22 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium">{node.sessionId}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.22em] text-slate-500">
-              {node.branchRootFrameId ? `Forked at frame #${node.branchRootFrameId}` : "Root session"}
+            <div className="mt-1 truncate text-xs leading-5 text-slate-300">{node.headline}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-400">
+                {node.frameCount} frames
+              </span>
+              {node.childCount > 0 ? (
+                <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-violet-200">
+                  {node.childCount} branch{node.childCount === 1 ? "" : "es"}
+                </span>
+              ) : null}
+              <span className="rounded-full border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                {node.branchRootFrameId ? `Frame #${node.branchRootFrameId}` : "Root"}
+              </span>
+            </div>
+            <div className="mt-2 truncate text-[11px] leading-5 text-slate-500">
+              {node.latestSummary}
             </div>
           </div>
         </div>

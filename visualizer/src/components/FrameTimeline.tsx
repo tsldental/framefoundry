@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import type { Frame, JsonValue } from "../types";
+import type { Frame, JsonValue, SessionSummary } from "../types";
 
 interface FrameTimelineProps {
   sessionId: string | null;
+  session: SessionSummary | null;
   frames: Frame[];
   isLoading: boolean;
   selectedFrameId: number | null;
@@ -22,6 +23,7 @@ interface TimelineEntry {
 
 export function FrameTimeline({
   sessionId,
+  session,
   frames,
   isLoading,
   selectedFrameId,
@@ -55,6 +57,8 @@ export function FrameTimeline({
           <Metric label="Replay" value={replayFrames.length} />
         </div>
       </div>
+
+      {session ? <SnapshotStrip session={session} /> : null}
 
       {!sessionId ? (
         <EmptyState message="Choose a session to inspect its recorded timeline." />
@@ -98,6 +102,24 @@ export function FrameTimeline({
         </div>
       ) : null}
     </main>
+  );
+}
+
+function SnapshotStrip({ session }: { session: SessionSummary }) {
+  return (
+    <section className="mb-6 grid gap-3 xl:grid-cols-3">
+      <SnapshotCard label="Opening Snapshot" value={session.headline} accent="cyan" />
+      <SnapshotCard label="Latest Checkpoint" value={session.latestSummary} accent="emerald" />
+      <SnapshotCard
+        label="Branch Context"
+        value={
+          session.branchRootFrameId
+            ? `Forked from frame #${session.branchRootFrameId} with ${session.frameCount} recorded frames across this path.`
+            : `Root session with ${session.frameCount} recorded frames and ${session.childCount} downstream branch${session.childCount === 1 ? "" : "es"}.`
+        }
+        accent="violet"
+      />
+    </section>
   );
 }
 
@@ -270,6 +292,37 @@ function Metric({ label, value }: MetricProps) {
     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-right">
       <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function SnapshotCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: "cyan" | "emerald" | "violet";
+}) {
+  const accentClass =
+    accent === "cyan"
+      ? "border-cyan-400/20 bg-cyan-400/5"
+      : accent === "emerald"
+        ? "border-emerald-400/20 bg-emerald-400/5"
+        : "border-violet-400/20 bg-violet-400/5";
+
+  const labelClass =
+    accent === "cyan"
+      ? "text-cyan-300"
+      : accent === "emerald"
+        ? "text-emerald-300"
+        : "text-violet-300";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${accentClass}`}>
+      <div className={`text-[11px] uppercase tracking-[0.24em] ${labelClass}`}>{label}</div>
+      <div className="mt-2 text-sm leading-6 text-slate-100">{value}</div>
     </div>
   );
 }
