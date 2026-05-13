@@ -224,6 +224,38 @@ node dist\index.js record --project 'C:\path\to\your-project' "Build the next fe
 node dist\index.js replay <sessionId>
 ```
 
+To replay a session for a specific project:
+
+```powershell
+node dist\index.js replay --project 'C:\path\to\your-project' <sessionId>
+```
+
+Example:
+
+```powershell
+Set-Location 'C:\Users\Todd\dAVM'
+node dist\index.js replay --project 'C:\Users\Todd\dAVM' 3289b7d4-b710-4a59-91c9-3abbadcb0300
+```
+
+What replay does:
+
+1. loads the recorded session frames
+2. re-runs the session using recorded tool results instead of fresh live tool output
+3. writes a **new replay session** into the same project database
+
+What to do after replay finishes:
+
+1. open framefoundry for that project
+2. click **Refresh**
+3. look for the new replay session
+4. open it and compare it against the original
+
+What you should expect to see in the visualizer:
+
+- a separate new session, not an overwrite of the original
+- replay-tagged frames
+- the same general path as the original run, but driven by recorded tool data
+
 ### Inspect a session log
 
 ```powershell
