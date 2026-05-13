@@ -167,7 +167,7 @@ function FrameCard({
           <FrameTagRow tags={frameTags} />
           <div className="flex items-center justify-center gap-3 text-sm text-amber-100">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10 text-lg">
-              💬
+              🔧
             </span>
             <div
               className="rounded-2xl border border-amber-500/20 bg-slate-900/80 px-4 py-3 font-mono text-left text-[13px] leading-6 text-amber-100"
