@@ -132,6 +132,7 @@ export class FrameStore {
   private readonly insertFrameStatement: Database.Statement;
   private readonly selectFrameStatement: Database.Statement;
   private readonly selectFramesBySessionStatement: Database.Statement;
+  private readonly selectSessionIdsStatement: Database.Statement;
   private readonly nextSequenceStatement: Database.Statement;
   private readonly upsertToolCallRegistryStatement: Database.Statement;
   private readonly updateToolResultRegistryStatement: Database.Statement;
@@ -210,6 +211,13 @@ export class FrameStore {
       FROM frames
       WHERE session_id = ?
       ORDER BY sequence ASC
+    `);
+
+    this.selectSessionIdsStatement = this.db.prepare(`
+      SELECT session_id
+      FROM frames
+      GROUP BY session_id
+      ORDER BY MAX(created_at) DESC, session_id ASC
     `);
 
     this.nextSequenceStatement = this.db.prepare(`
@@ -307,6 +315,11 @@ export class FrameStore {
   listFrames(sessionId: string): Frame[] {
     const rows = this.selectFramesBySessionStatement.all(sessionId) as FrameRow[];
     return rows.map(mapFrameRow);
+  }
+
+  listSessionIds(): string[] {
+    const rows = this.selectSessionIdsStatement.all() as Array<{ session_id: string }>;
+    return rows.map((row) => row.session_id);
   }
 
   getRegistryEntry(toolCallId: string): ToolRegistryEntry | null {
