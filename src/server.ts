@@ -1,6 +1,6 @@
 import express from "express";
 import { openFrameStore } from "./db";
-import { runReplay } from "./replay";
+import { runFork, runReplay } from "./replay";
 
 export interface ServerOptions {
   port?: number;
@@ -8,6 +8,7 @@ export interface ServerOptions {
 
 export function createServer() {
   const app = express();
+  app.use(express.json());
 
   app.get("/api/sessions", (_request, response) => {
     const db = openFrameStore();
@@ -38,6 +39,30 @@ export function createServer() {
     try {
       const replayResult = await runReplay(request.params.id);
       response.json(replayResult);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      response.status(500).json({ error: message });
+    }
+  });
+
+  app.post("/api/sessions/:id/fork", async (request, response) => {
+    const frameId = Number(request.body?.frameId);
+    const newPrompt =
+      typeof request.body?.newPrompt === "string" ? request.body.newPrompt.trim() : "";
+
+    if (!Number.isInteger(frameId)) {
+      response.status(400).json({ error: "frameId must be an integer" });
+      return;
+    }
+
+    if (!newPrompt) {
+      response.status(400).json({ error: "newPrompt is required" });
+      return;
+    }
+
+    try {
+      const forkResult = await runFork(request.params.id, frameId, newPrompt);
+      response.json(forkResult);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       response.status(500).json({ error: message });

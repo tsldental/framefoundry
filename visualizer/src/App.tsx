@@ -7,6 +7,7 @@ function App() {
   const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [frames, setFrames] = useState<Frame[]>([]);
+  const [selectedFrameId, setSelectedFrameId] = useState<number | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingFrames, setIsLoadingFrames] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +19,7 @@ function App() {
   useEffect(() => {
     if (!selectedSessionId) {
       setFrames([]);
+      setSelectedFrameId(null);
       return;
     }
 
@@ -58,10 +60,61 @@ function App() {
 
       const payload = (await response.json()) as SessionFramesResponse;
       setFrames(payload.frames);
+      setSelectedFrameId(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     } finally {
       setIsLoadingFrames(false);
+    }
+  }
+
+  async function forkFromFrame(frame: Frame) {
+    if (!selectedSessionId) {
+      return;
+    }
+
+    const newPrompt = window.prompt(
+      `Fork from frame #${frame.sequence} with a new prompt:`,
+      "Take this in a new direction.",
+    );
+
+    if (!newPrompt?.trim()) {
+      return;
+    }
+
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(selectedSessionId)}/fork`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          frameId: frame.id,
+          newPrompt: newPrompt.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? `Failed to fork from frame ${frame.id}`);
+      }
+
+      const payload = (await response.json()) as {
+        forkSessionId: string;
+        frames: Frame[];
+      };
+
+      setSessionIds((currentSessionIds) => [
+        payload.forkSessionId,
+        ...currentSessionIds.filter((sessionId) => sessionId !== payload.forkSessionId),
+      ]);
+      setSelectedSessionId(payload.forkSessionId);
+      setFrames(payload.frames);
+      setSelectedFrameId(null);
+    } catch (forkError) {
+      setError(forkError instanceof Error ? forkError.message : String(forkError));
     }
   }
 
@@ -109,6 +162,9 @@ function App() {
             sessionId={selectedSessionId}
             frames={frames}
             isLoading={isLoadingFrames}
+            selectedFrameId={selectedFrameId}
+            onSelectFrame={(frame) => setSelectedFrameId(frame.id)}
+            onForkFromFrame={forkFromFrame}
           />
         </div>
       </div>

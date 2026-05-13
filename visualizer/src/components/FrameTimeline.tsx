@@ -5,6 +5,9 @@ interface FrameTimelineProps {
   sessionId: string | null;
   frames: Frame[];
   isLoading: boolean;
+  selectedFrameId: number | null;
+  onSelectFrame: (frame: Frame) => void;
+  onForkFromFrame: (frame: Frame) => void;
 }
 
 interface MetricProps {
@@ -17,7 +20,14 @@ interface TimelineEntry {
   toolResult?: Frame;
 }
 
-export function FrameTimeline({ sessionId, frames, isLoading }: FrameTimelineProps) {
+export function FrameTimeline({
+  sessionId,
+  frames,
+  isLoading,
+  selectedFrameId,
+  onSelectFrame,
+  onForkFromFrame,
+}: FrameTimelineProps) {
   const replayFrames = useMemo(
     () => frames.filter((frame) => isReplayFrame(frame.metadata)),
     [frames],
@@ -28,6 +38,7 @@ export function FrameTimeline({ sessionId, frames, isLoading }: FrameTimelinePro
   );
 
   const framePairs = useMemo(() => buildFramePairs(frames), [frames]);
+  const selectedFrame = frames.find((frame) => frame.id === selectedFrameId) ?? null;
 
   return (
     <main className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/30">
@@ -54,21 +65,66 @@ export function FrameTimeline({ sessionId, frames, isLoading }: FrameTimelinePro
       ) : (
         <div className="space-y-4">
           {framePairs.map(({ frame, toolResult }) => (
-            <FrameCard key={frame.id} frame={frame} toolResult={toolResult} />
+            <FrameCard
+              key={frame.id}
+              frame={frame}
+              toolResult={toolResult}
+              selectedFrameId={selectedFrameId}
+              onSelectFrame={onSelectFrame}
+            />
           ))}
         </div>
       )}
+
+      {selectedFrame ? (
+        <div className="pointer-events-none sticky bottom-4 mt-6 flex justify-center">
+          <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-cyan-400/30 bg-slate-950/95 px-5 py-3 shadow-2xl shadow-cyan-950/20 backdrop-blur">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">
+                Selected Frame
+              </div>
+              <div className="mt-1 text-sm text-white">
+                #{selectedFrame.sequence} {selectedFrame.frameType}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onForkFromFrame(selectedFrame)}
+              className="rounded-full border border-cyan-400/40 bg-cyan-400/15 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-400/25"
+            >
+              Fork from here
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
 
-function FrameCard({ frame, toolResult }: { frame: Frame; toolResult?: Frame }) {
+function FrameCard({
+  frame,
+  toolResult,
+  selectedFrameId,
+  onSelectFrame,
+}: {
+  frame: Frame;
+  toolResult?: Frame;
+  selectedFrameId: number | null;
+  onSelectFrame: (frame: Frame) => void;
+}) {
   const [showRawJson, setShowRawJson] = useState(false);
+  const isSelected = selectedFrameId === frame.id;
+  const isToolResultSelected = toolResult ? selectedFrameId === toolResult.id : false;
 
   if (frame.frameType === "tool_call") {
     return (
       <div className="flex justify-center">
-        <article className="w-full max-w-3xl rounded-3xl border border-amber-500/20 bg-slate-950/80 p-5 text-center shadow-lg shadow-slate-950/30">
+        <article
+          onClick={() => onSelectFrame(frame)}
+          className={`w-full max-w-3xl cursor-pointer rounded-3xl border bg-slate-950/80 p-5 text-center shadow-lg shadow-slate-950/30 transition ${
+            isSelected ? "border-cyan-400 shadow-cyan-950/20" : "border-amber-500/20"
+          }`}
+        >
           <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
           <div className="flex items-center justify-center gap-3 text-sm text-amber-100">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10 text-lg">
@@ -83,7 +139,15 @@ function FrameCard({ frame, toolResult }: { frame: Frame; toolResult?: Frame }) 
           </div>
 
           {toolResult ? (
-            <div className="mt-4 ml-auto mr-auto max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-left">
+            <div
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectFrame(toolResult);
+              }}
+              className={`mt-4 ml-auto mr-auto max-w-2xl cursor-pointer rounded-2xl border bg-slate-900/90 p-4 text-left transition ${
+                isToolResultSelected ? "border-cyan-400 shadow-lg shadow-cyan-950/20" : "border-slate-800"
+              }`}
+            >
               <div className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">
                 Tool Result
               </div>
@@ -107,7 +171,12 @@ function FrameCard({ frame, toolResult }: { frame: Frame; toolResult?: Frame }) 
       : "bg-sky-500/5 shadow-sky-950/10";
 
   return (
-    <article className={`rounded-3xl border bg-slate-950/80 p-5 shadow-lg ${alignmentClass} ${accentClass}`}>
+    <article
+      onClick={() => onSelectFrame(frame)}
+      className={`cursor-pointer rounded-3xl border bg-slate-950/80 p-5 shadow-lg transition ${alignmentClass} ${accentClass} ${
+        isSelected ? "border-cyan-400 shadow-cyan-950/20" : ""
+      }`}
+    >
       <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
         <pre className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">
