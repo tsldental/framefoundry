@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { ProjectContext, SessionSummary } from "../types";
+import { formatTimestamp, shortSessionId } from "../utils";
 
 interface SessionSidebarProps {
   project: ProjectContext | null;
@@ -28,11 +30,21 @@ export function SessionSidebar({
   onRefresh,
   onSelectSession,
 }: SessionSidebarProps) {
-  const sessionTree = buildSessionTree(sessions);
+  const [filter, setFilter] = useState("");
+  const sessionTree = buildSessionTree(sessions, filter);
+
+  const matchCount = filter
+    ? sessions.filter(
+        (s) =>
+          s.headline.toLowerCase().includes(filter.toLowerCase()) ||
+          s.sessionId.toLowerCase().includes(filter.toLowerCase()) ||
+          s.latestSummary.toLowerCase().includes(filter.toLowerCase()),
+      ).length
+    : sessions.length;
 
   return (
-    <aside className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/30">
-      <div className="mb-4 flex items-center justify-between">
+    <aside className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/30">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
             Sessions
@@ -50,14 +62,25 @@ export function SessionSidebar({
         </button>
       </div>
 
-      <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-        <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">Total</div>
-        <div className="mt-1 text-lg font-semibold text-white">{sessions.length}</div>
+      {/* Search / filter */}
+      <input
+        type="search"
+        placeholder="Filter sessions…"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/60 focus:outline-none focus:ring-1 focus:ring-cyan-500/30"
+      />
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+        <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
+          {filter ? "Matches" : "Total"}
+        </div>
+        <div className="mt-1 text-lg font-semibold text-white">{matchCount}</div>
       </div>
 
       {project ? (
         <div
-          className="mb-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3"
+          className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3"
           title={`Project: ${project.projectPath}\nDatabase: ${project.dbPath}`}
         >
           <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">Project</div>
@@ -68,10 +91,12 @@ export function SessionSidebar({
 
       {isLoading ? (
         <p className="text-sm text-slate-400">Loading sessions...</p>
-      ) : sessions.length === 0 ? (
-        <p className="text-sm text-slate-400">No sessions recorded yet.</p>
+      ) : matchCount === 0 ? (
+        <p className="text-sm text-slate-400">
+          {filter ? "No sessions match this filter." : "No sessions recorded yet."}
+        </p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto">
           {sessionTree.map((node) => (
             <SessionTreeItem
               key={node.sessionId}
@@ -90,6 +115,7 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
   const isSelected = node.sessionId === selectedSessionId;
   const indent = node.depth * 16;
   const tooltip = [node.sessionId, node.headline, node.latestSummary].join("\n\n");
+  const timestamp = node.lastUpdatedAt || node.createdAt;
 
   return (
     <div className="space-y-2">
@@ -112,8 +138,12 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
             {node.depth === 0 ? "●" : "└"}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate font-medium">{node.sessionId}</div>
-            <div className="mt-1 truncate text-xs leading-5 text-slate-300">{node.headline}</div>
+            {/* Headline is now the primary display */}
+            <div className="truncate font-semibold text-slate-100">{node.headline}</div>
+            {/* Session ID as small secondary text */}
+            <div className="mt-0.5 font-mono text-[10px] text-slate-500">
+              …{shortSessionId(node.sessionId)}
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-400">
                 {node.frameCount} frames
@@ -124,10 +154,15 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
                 </span>
               ) : null}
               <span className="rounded-full border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                {node.branchRootFrameId ? `Frame #${node.branchRootFrameId}` : "Root"}
+                {node.branchRootFrameId ? `Fork #${node.branchRootFrameId}` : "Root"}
               </span>
+              {timestamp ? (
+                <span className="ml-auto text-[10px] text-slate-600">
+                  {formatTimestamp(timestamp)}
+                </span>
+              ) : null}
             </div>
-            <div className="mt-2 truncate text-[11px] leading-5 text-slate-500">
+            <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
               {node.latestSummary}
             </div>
           </div>
@@ -146,10 +181,25 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
   );
 }
 
-function buildSessionTree(sessions: SessionSummary[]): SessionTreeNode[] {
+function buildSessionTree(sessions: SessionSummary[], filter = ""): SessionTreeNode[] {
+  const lowerFilter = filter.toLowerCase();
+  const filteredIds = filter
+    ? new Set(
+        sessions
+          .filter(
+            (s) =>
+              s.headline.toLowerCase().includes(lowerFilter) ||
+              s.sessionId.toLowerCase().includes(lowerFilter) ||
+              s.latestSummary.toLowerCase().includes(lowerFilter),
+          )
+          .map((s) => s.sessionId),
+      )
+    : null;
+
   const nodes = new Map<string, SessionTreeNode>();
 
   for (const session of sessions) {
+    if (filteredIds && !filteredIds.has(session.sessionId)) continue;
     nodes.set(session.sessionId, {
       ...session,
       depth: 0,

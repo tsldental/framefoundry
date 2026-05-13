@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ForkModal } from "./components/ForkModal";
 import { FrameTimeline } from "./components/FrameTimeline";
 import { NotesApp } from "./components/NotesApp";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -22,6 +23,7 @@ function App() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingFrames, setIsLoadingFrames] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forkFrame, setForkFrame] = useState<Frame | null>(null);
   const selectedSession =
     sessions.find((session) => session.sessionId === selectedSessionId) ?? null;
 
@@ -97,19 +99,12 @@ function App() {
   }
 
   async function forkFromFrame(frame: Frame) {
-    if (!selectedSessionId) {
-      return;
-    }
+    setForkFrame(frame);
+  }
 
-    const newPrompt = window.prompt(
-      `Fork from frame #${frame.sequence} with a new prompt:`,
-      "Take this in a new direction.",
-    );
-
-    if (!newPrompt?.trim()) {
-      return;
-    }
-
+  async function handleForkConfirm(newPrompt: string) {
+    if (!selectedSessionId || !forkFrame) return;
+    setForkFrame(null);
     setError(null);
 
     try {
@@ -119,14 +114,14 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          frameId: frame.id,
-          newPrompt: newPrompt.trim(),
+          frameId: forkFrame.id,
+          newPrompt,
         }),
       });
 
       if (!response.ok) {
         const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error ?? `Failed to fork from frame ${frame.id}`);
+        throw new Error(payload.error ?? `Failed to fork from frame ${forkFrame.id}`);
       }
 
       const payload = (await response.json()) as {
@@ -211,7 +206,9 @@ function App() {
 
         <div className="grid flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           {activeTab === "notes" ? (
-            <NotesApp />
+            <div className="lg:col-span-2">
+              <NotesApp />
+            </div>
           ) : (
             <>
           <SessionSidebar
@@ -235,6 +232,14 @@ function App() {
           )}
         </div>
       </div>
+
+      {forkFrame ? (
+        <ForkModal
+          frame={forkFrame}
+          onConfirm={(prompt) => void handleForkConfirm(prompt)}
+          onCancel={() => setForkFrame(null)}
+        />
+      ) : null}
     </div>
   );
 }

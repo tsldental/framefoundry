@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Frame, JsonValue, SessionSummary } from "../types";
+import { formatTimestamp } from "../utils";
 
 interface FrameTimelineProps {
   sessionId: string | null;
@@ -48,8 +49,13 @@ export function FrameTimeline({
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Active Session</p>
           <h2 className="mt-2 text-2xl font-semibold text-white">
-            {sessionId ?? "Select a session"}
+            {session ? session.headline : sessionId ?? "Select a session"}
           </h2>
+          {session && sessionId ? (
+            <p className="mt-1 font-mono text-xs text-slate-500" title={sessionId}>
+              …{sessionId.slice(-12)}
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-3 text-xs text-slate-300">
           <Metric label="Frames" value={frames.length} />
@@ -269,7 +275,9 @@ function FrameHeader({
       >
         {showRawJson ? "Hide Raw JSON" : "Raw JSON"}
       </button>
-      <span className="text-xs text-slate-500">{frame.createdAt}</span>
+      <span className="text-xs text-slate-500" title={frame.createdAt}>
+        {formatTimestamp(frame.createdAt)}
+      </span>
     </div>
   );
 }
@@ -277,7 +285,7 @@ function FrameHeader({
 function FrameFooter({ frame, showRawJson }: { frame: Frame; showRawJson: boolean }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-      <span>{frame.createdAt}</span>
+      <span title={frame.createdAt}>{formatTimestamp(frame.createdAt)}</span>
       {showRawJson ? <span>included in raw view</span> : null}
     </div>
   );
