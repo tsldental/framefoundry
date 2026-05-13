@@ -139,6 +139,7 @@ function FrameCard({
   const isToolResultSelected = toolResult ? selectedFrameId === toolResult.id : false;
   const frameContent = formatPrimaryContent(frame);
   const frameTitle = describeFrame(frame);
+  const frameTags = classifyFrameTags(frame, frameContent);
 
   if (frame.frameType === "tool_call") {
     const toolArgsSummary = `args=${truncateString(JSON.stringify(extractValueField(frame.content, "args")))}`;
@@ -157,6 +158,7 @@ function FrameCard({
           }`}
         >
           <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
+          <FrameTagRow tags={frameTags} />
           <div className="flex items-center justify-center gap-3 text-sm text-amber-100">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10 text-lg">
               💬
@@ -215,6 +217,7 @@ function FrameCard({
       }`}
     >
       <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
+      <FrameTagRow tags={frameTags} />
       <div className="mb-3 text-sm font-medium text-slate-300">{frameTitle}</div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
         <pre
@@ -276,6 +279,25 @@ function FrameFooter({ frame, showRawJson }: { frame: Frame; showRawJson: boolea
     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
       <span>{frame.createdAt}</span>
       {showRawJson ? <span>included in raw view</span> : null}
+    </div>
+  );
+}
+
+function FrameTagRow({ tags }: { tags: TimelineTag[] }) {
+  if (tags.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {tags.map((tag) => (
+        <span
+          key={`${tag.label}-${tag.tone}`}
+          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.2em] ${tagClassName(tag.tone)}`}
+        >
+          {tag.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -344,6 +366,11 @@ function SnapshotCard({
       <div className="mt-2 text-sm leading-6 text-slate-100">{value}</div>
     </div>
   );
+}
+
+interface TimelineTag {
+  label: string;
+  tone: "cyan" | "emerald" | "amber" | "violet" | "slate";
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -452,6 +479,76 @@ function describeEmptyLlmTurn(frame: Frame): string {
   }
 
   return "This language-model turn has no visible text recorded.";
+}
+
+function classifyFrameTags(frame: Frame, frameContent: string): TimelineTag[] {
+  const tags: TimelineTag[] = [];
+  const lowerContent = frameContent.toLowerCase();
+
+  if (isForkFrame(frame)) {
+    tags.push({ label: "Fork Point", tone: "violet" });
+  }
+
+  if (frame.frameType === "tool_call") {
+    tags.push({ label: "Tool", tone: "amber" });
+    tags.push({ label: "Action", tone: "cyan" });
+    return tags;
+  }
+
+  if (frame.frameType === "tool_result") {
+    tags.push({ label: "Result", tone: "emerald" });
+    return tags;
+  }
+
+  if (frame.frameType === "system_event") {
+    tags.push({ label: "System", tone: "slate" });
+    return tags;
+  }
+
+  if (frame.role === "assistant") {
+    if (
+      lowerContent.includes("plan") ||
+      lowerContent.includes("first i") ||
+      lowerContent.includes("i'll") ||
+      lowerContent.includes("i will") ||
+      lowerContent.includes("step 1") ||
+      lowerContent.includes("here's the plan")
+    ) {
+      tags.push({ label: "Plan", tone: "violet" });
+    }
+
+    tags.push({ label: "Action", tone: "cyan" });
+    return tags;
+  }
+
+  if (frame.role === "user") {
+    tags.push({ label: "Request", tone: "slate" });
+  }
+
+  return tags;
+}
+
+function isForkFrame(frame: Frame): boolean {
+  if (typeof frame.metadata !== "object" || frame.metadata === null || Array.isArray(frame.metadata)) {
+    return false;
+  }
+
+  return frame.metadata.is_fork === true || frame.branchRootFrameId !== null;
+}
+
+function tagClassName(tone: TimelineTag["tone"]): string {
+  switch (tone) {
+    case "cyan":
+      return "border-cyan-500/30 bg-cyan-500/10 text-cyan-200";
+    case "emerald":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+    case "amber":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+    case "violet":
+      return "border-violet-500/30 bg-violet-500/10 text-violet-200";
+    default:
+      return "border-slate-700 bg-slate-800 text-slate-200";
+  }
 }
 
 function extractStringField(value: JsonValue, fieldName: string): string {
