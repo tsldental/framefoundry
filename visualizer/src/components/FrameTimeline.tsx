@@ -144,7 +144,6 @@ function FrameCard({
   const isSelected = selectedFrameId === frame.id;
   const isToolResultSelected = toolResult ? selectedFrameId === toolResult.id : false;
   const frameContent = formatPrimaryContent(frame);
-  const frameTitle = describeFrame(frame);
   const frameTags = classifyFrameTags(frame, frameContent);
 
   if (frame.frameType === "tool_call") {
@@ -224,7 +223,6 @@ function FrameCard({
     >
       <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
       <FrameTagRow tags={frameTags} />
-      <div className="mb-3 text-sm font-medium text-slate-300">{frameTitle}</div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
         <pre
           className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-6 text-slate-100"
@@ -451,30 +449,6 @@ function formatPrimaryContent(frame: Frame): string {
   }
 
   return JSON.stringify(frame.content, null, 2);
-}
-
-function describeFrame(frame: Frame): string {
-  if (frame.frameType === "llm_turn") {
-    if (frame.role === "user") {
-      return "User request";
-    }
-
-    if (frame.role === "assistant") {
-      return "Assistant response";
-    }
-
-    return "Language model turn";
-  }
-
-  if (frame.frameType === "system_event") {
-    return "System event";
-  }
-
-  if (frame.frameType === "tool_result") {
-    return "Tool output";
-  }
-
-  return "Tool invocation";
 }
 
 function describeEmptyLlmTurn(frame: Frame): string {
