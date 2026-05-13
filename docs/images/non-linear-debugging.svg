@@ -34,28 +34,30 @@
   <circle cx="790" cy="360" r="18" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
   <circle cx="970" cy="360" r="18" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
 
-  <text x="222" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">user prompt</text>
-  <text x="388" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">tool call</text>
-  <text x="548" y="410" fill="#67E8F9" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">selected frame</text>
-  <text x="742" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">assistant</text>
-  <text x="936" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">result</text>
+  <text x="198" y="420" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">user prompt</text>
+  <text x="388" y="420" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">tool call</text>
+  <text x="530" y="420" fill="#67E8F9" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">selected frame</text>
+  <text x="742" y="420" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">assistant</text>
+  <text x="948" y="420" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">result</text>
 
-  <path d="M610 338V202C610 188 622 176 636 176H820" stroke="#8B5CF6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M610 382V516C610 530 622 542 636 542H820" stroke="#34D399" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M610 338V246C610 228 624 214 642 214H794" stroke="#8B5CF6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M610 382V474C610 492 624 506 642 506H794" stroke="#34D399" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <rect x="820" y="128" width="286" height="96" rx="22" fill="url(#violet)" stroke="#6D28D9"/>
-  <text x="850" y="168" fill="#C4B5FD" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">FORK A</text>
-  <text x="850" y="202" fill="#F8FAFC" font-size="26" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Try a new prompt</text>
+  <rect x="794" y="166" width="312" height="96" rx="22" fill="url(#violet)" stroke="#6D28D9"/>
+  <text x="824" y="206" fill="#C4B5FD" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">FORK A</text>
+  <text x="824" y="240" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Try a new prompt</text>
 
-  <rect x="820" y="494" width="286" height="96" rx="22" fill="url(#emerald)" stroke="#059669"/>
-  <text x="850" y="534" fill="#6EE7B7" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">FORK B</text>
-  <text x="850" y="568" fill="#F8FAFC" font-size="26" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Refactor the reasoning</text>
+  <rect x="794" y="458" width="312" height="112" rx="22" fill="url(#emerald)" stroke="#059669"/>
+  <text x="824" y="498" fill="#6EE7B7" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">FORK B</text>
+  <text x="824" y="532" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Refactor the</text>
+  <text x="824" y="560" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">reasoning</text>
 
   <rect x="122" y="240" width="356" height="84" rx="22" fill="url(#cyan)" stroke="#155E75"/>
   <text x="152" y="274" fill="#67E8F9" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">ORIGINAL SESSION</text>
   <text x="152" y="306" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Deterministic recorded timeline</text>
 
-  <rect x="140" y="542" width="470" height="84" rx="22" fill="#0B1220" stroke="#1E293B"/>
-  <text x="170" y="576" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">branch_root_frame_id preserves lineage</text>
-  <text x="170" y="606" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">Every fork remembers exactly where the alternative path began.</text>
+  <rect x="126" y="520" width="520" height="98" rx="22" fill="#0B1220" stroke="#1E293B"/>
+  <text x="156" y="560" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">branch_root_frame_id preserves lineage</text>
+  <text x="156" y="592" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">Every fork remembers exactly where the alternative</text>
+  <text x="156" y="616" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">path began.</text>
 </svg>
