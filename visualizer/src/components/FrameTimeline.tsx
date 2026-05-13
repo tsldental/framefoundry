@@ -41,6 +41,7 @@ export function FrameTimeline({
   );
 
   const framePairs = useMemo(() => buildFramePairs(frames), [frames]);
+  const timelineDiagnostics = useMemo(() => analyzeTimelineEntries(framePairs), [framePairs]);
   const selectedFrame = frames.find((frame) => frame.id === selectedFrameId) ?? null;
 
   return (
@@ -61,6 +62,7 @@ export function FrameTimeline({
           <Metric label="Frames" value={frames.length} />
           <Metric label="Live" value={liveFrames.length} />
           <Metric label="Replay" value={replayFrames.length} />
+          <Metric label="Errors" value={timelineDiagnostics.errorCount} />
         </div>
       </div>
 
@@ -80,6 +82,8 @@ export function FrameTimeline({
               frame={frame}
               toolResult={toolResult}
               selectedFrameId={selectedFrameId}
+              hasError={timelineDiagnostics.errorFrameIds.has(frame.id)}
+              recommendedBranchPoint={timelineDiagnostics.branchPointFrameIds.has(frame.id)}
               onSelectFrame={onSelectFrame}
             />
           ))}
@@ -133,11 +137,15 @@ function FrameCard({
   frame,
   toolResult,
   selectedFrameId,
+  hasError,
+  recommendedBranchPoint,
   onSelectFrame,
 }: {
   frame: Frame;
   toolResult?: Frame;
   selectedFrameId: number | null;
+  hasError: boolean;
+  recommendedBranchPoint: boolean;
   onSelectFrame: (frame: Frame) => void;
 }) {
   const [showRawJson, setShowRawJson] = useState(false);
@@ -159,11 +167,20 @@ function FrameCard({
           onClick={() => onSelectFrame(frame)}
           title={toolArgsTooltip}
           className={`w-full max-w-3xl cursor-pointer rounded-3xl border bg-slate-950/80 p-5 text-center shadow-lg shadow-slate-950/30 transition ${
-            isSelected ? "border-cyan-400 shadow-cyan-950/20" : "border-amber-500/20"
+            hasError
+              ? "border-rose-500/40 bg-rose-500/6 shadow-rose-950/20"
+              : isSelected
+                ? "border-cyan-400 shadow-cyan-950/20"
+                : "border-amber-500/20"
           }`}
         >
           <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
-          <FrameTagRow tags={frameTags} />
+          <FrameTagRow
+            tags={augmentTags(frameTags, {
+              hasError,
+              recommendedBranchPoint,
+            })}
+          />
           <div className="flex items-center justify-center gap-3 text-sm text-amber-100">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10 text-lg">
               🔧
@@ -184,15 +201,27 @@ function FrameCard({
                 onSelectFrame(toolResult);
               }}
                 className={`mt-4 ml-auto mr-auto max-w-2xl cursor-pointer rounded-2xl border bg-slate-900/90 p-4 text-left transition ${
-                  isToolResultSelected ? "border-cyan-400 shadow-lg shadow-cyan-950/20" : "border-slate-800"
+                  hasError
+                    ? "border-rose-500/40 bg-rose-500/8"
+                    : isToolResultSelected
+                      ? "border-cyan-400 shadow-lg shadow-cyan-950/20"
+                      : "border-slate-800"
                 }`}
                 title={toolResultTooltip}
               >
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">
-                Tool Result
+              <div
+                className={`mb-2 text-xs font-semibold uppercase tracking-[0.25em] ${
+                  hasError ? "text-rose-300" : "text-emerald-300"
+                }`}
+              >
+                {hasError ? "Tool Result Error" : "Tool Result"}
               </div>
               <div
-                className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-slate-200"
+                className={`rounded-xl px-4 py-3 text-sm text-slate-200 ${
+                  hasError
+                    ? "border border-rose-500/30 bg-rose-500/8"
+                    : "border border-emerald-500/20 bg-emerald-500/5"
+                }`}
                 title={toolResultTooltip}
               >
                 {truncateString(JSON.stringify(extractValueField(toolResult.content, "result")), 220)}
@@ -217,12 +246,19 @@ function FrameCard({
     <article
       onClick={() => onSelectFrame(frame)}
       title={frameContent}
-      className={`cursor-pointer rounded-3xl border bg-slate-950/80 p-5 shadow-lg transition ${alignmentClass} ${accentClass} ${
+      className={`cursor-pointer rounded-3xl border bg-slate-950/80 p-5 shadow-lg transition ${
+        hasError ? "border-rose-500/40 bg-rose-500/6 shadow-rose-950/20" : `${alignmentClass} ${accentClass}`
+      } ${
         isSelected ? "border-cyan-400 shadow-cyan-950/20" : ""
       }`}
     >
       <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
-      <FrameTagRow tags={frameTags} />
+      <FrameTagRow
+        tags={augmentTags(frameTags, {
+          hasError,
+          recommendedBranchPoint,
+        })}
+      />
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
         <pre
           className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-6 text-slate-100"
@@ -376,7 +412,13 @@ function SnapshotCard({
 
 interface TimelineTag {
   label: string;
-  tone: "cyan" | "emerald" | "amber" | "violet" | "slate";
+  tone: "cyan" | "emerald" | "amber" | "violet" | "rose" | "slate";
+}
+
+interface TimelineDiagnostics {
+  errorFrameIds: Set<number>;
+  branchPointFrameIds: Set<number>;
+  errorCount: number;
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -510,6 +552,94 @@ function classifyFrameTags(frame: Frame, frameContent: string): TimelineTag[] {
   return tags;
 }
 
+function augmentTags(
+  tags: TimelineTag[],
+  options: {
+    hasError: boolean;
+    recommendedBranchPoint: boolean;
+  },
+): TimelineTag[] {
+  const nextTags = [...tags];
+
+  if (options.hasError) {
+    nextTags.unshift({ label: "Error", tone: "rose" });
+  }
+
+  if (options.recommendedBranchPoint) {
+    nextTags.unshift({ label: "Branch Here", tone: "violet" });
+  }
+
+  return nextTags;
+}
+
+function analyzeTimelineEntries(entries: TimelineEntry[]): TimelineDiagnostics {
+  const errorFrameIds = new Set<number>();
+  const branchPointFrameIds = new Set<number>();
+
+  entries.forEach((entry, index) => {
+    if (!entryLooksLikeError(entry)) {
+      return;
+    }
+
+    errorFrameIds.add(entry.frame.id);
+
+    if (entry.toolResult) {
+      errorFrameIds.add(entry.toolResult.id);
+    }
+
+    const previousEntry = index > 0 ? entries[index - 1] : null;
+    if (previousEntry) {
+      branchPointFrameIds.add(previousEntry.frame.id);
+    }
+  });
+
+  return {
+    errorFrameIds,
+    branchPointFrameIds,
+    errorCount: errorFrameIds.size,
+  };
+}
+
+function entryLooksLikeError(entry: TimelineEntry): boolean {
+  return frameLooksLikeError(entry.frame) || (entry.toolResult ? frameLooksLikeError(entry.toolResult) : false);
+}
+
+function frameLooksLikeError(frame: Frame): boolean {
+  const haystack = [
+    frame.frameType,
+    frame.role ?? "",
+    frame.toolName ?? "",
+    stringifyForSearch(frame.content),
+    stringifyForSearch(frame.metadata),
+  ]
+    .join("\n")
+    .toLowerCase();
+
+  return (
+    haystack.includes("error") ||
+    haystack.includes("exception") ||
+    haystack.includes("traceback") ||
+    haystack.includes("failed") ||
+    haystack.includes("failure") ||
+    haystack.includes("enoent") ||
+    haystack.includes("eacces") ||
+    haystack.includes("not found") ||
+    haystack.includes("timed out") ||
+    haystack.includes("exit code 1") ||
+    haystack.includes("exit code 2") ||
+    haystack.includes("status\":500") ||
+    haystack.includes("\"error\":")
+  );
+}
+
+function stringifyForSearch(value: JsonValue): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value);
+}
+
 function isForkFrame(frame: Frame): boolean {
   if (typeof frame.metadata !== "object" || frame.metadata === null || Array.isArray(frame.metadata)) {
     return false;
@@ -528,6 +658,8 @@ function tagClassName(tone: TimelineTag["tone"]): string {
       return "border-amber-500/30 bg-amber-500/10 text-amber-200";
     case "violet":
       return "border-violet-500/30 bg-violet-500/10 text-violet-200";
+    case "rose":
+      return "border-rose-500/30 bg-rose-500/10 text-rose-200";
     default:
       return "border-slate-700 bg-slate-800 text-slate-200";
   }
