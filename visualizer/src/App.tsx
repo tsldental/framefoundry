@@ -2,12 +2,19 @@ import { useEffect, useState } from "react";
 import { FrameTimeline } from "./components/FrameTimeline";
 import { NotesApp } from "./components/NotesApp";
 import { SessionSidebar } from "./components/SessionSidebar";
-import type { Frame, SessionFramesResponse, SessionSummary, SessionsResponse } from "./types";
+import type {
+  Frame,
+  ProjectContext,
+  SessionFramesResponse,
+  SessionSummary,
+  SessionsResponse,
+} from "./types";
 
 type Tab = "sessions" | "notes";
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("sessions");
+  const [project, setProject] = useState<ProjectContext | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [frames, setFrames] = useState<Frame[]>([]);
@@ -21,6 +28,11 @@ function App() {
   useEffect(() => {
     void loadSessions();
   }, []);
+
+  useEffect(() => {
+    const projectSuffix = project ? ` — ${project.name}` : "";
+    document.title = `framefoundry${projectSuffix}`;
+  }, [project]);
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -45,6 +57,7 @@ function App() {
 
       const payload = (await response.json()) as SessionsResponse;
       const normalizedSessions = normalizeSessionsResponse(payload);
+      setProject(normalizeProjectContext(payload.project));
       setSessions(normalizedSessions);
       setSelectedSessionId((currentSessionId) => {
         const nextSessionId = preferredSessionId ?? currentSessionId;
@@ -142,6 +155,17 @@ function App() {
               <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">
                 {activeTab === "sessions" ? "Cognitive Snapshot Explorer" : "Notes"}
               </h1>
+              {project ? (
+                <div
+                  className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100"
+                  title={`Project: ${project.projectPath}\nDatabase: ${project.dbPath}`}
+                >
+                  <span className="font-semibold uppercase tracking-[0.22em] text-cyan-300">
+                    Project
+                  </span>
+                  <span className="truncate">{project.name}</span>
+                </div>
+              ) : null}
             </div>
             <div className="flex items-center gap-3">
               {/* Tab switcher */}
@@ -190,10 +214,11 @@ function App() {
             <NotesApp />
           ) : (
             <>
-              <SessionSidebar
-                sessions={sessions}
-                selectedSessionId={selectedSessionId}
-                isLoading={isLoadingSessions}
+          <SessionSidebar
+            project={project}
+            sessions={sessions}
+            selectedSessionId={selectedSessionId}
+            isLoading={isLoadingSessions}
                 onRefresh={() => void loadSessions()}
                 onSelectSession={setSelectedSessionId}
               />
@@ -215,6 +240,18 @@ function App() {
 }
 
 export default App;
+
+function normalizeProjectContext(project: ProjectContext | undefined): ProjectContext | null {
+  if (!project) {
+    return null;
+  }
+
+  return {
+    name: typeof project.name === "string" && project.name.trim() ? project.name : "unknown-project",
+    projectPath: typeof project.projectPath === "string" ? project.projectPath : "",
+    dbPath: typeof project.dbPath === "string" ? project.dbPath : "",
+  };
+}
 
 function normalizeSessionsResponse(payload: SessionsResponse): SessionSummary[] {
   if (Array.isArray(payload.sessions) && payload.sessions.length > 0) {

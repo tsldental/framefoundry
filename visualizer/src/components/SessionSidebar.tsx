@@ -1,6 +1,7 @@
-import type { SessionSummary } from "../types";
+import type { ProjectContext, SessionSummary } from "../types";
 
 interface SessionSidebarProps {
+  project: ProjectContext | null;
   sessions: SessionSummary[];
   selectedSessionId: string | null;
   isLoading: boolean;
@@ -20,6 +21,7 @@ interface SessionTreeItemProps {
 }
 
 export function SessionSidebar({
+  project,
   sessions,
   selectedSessionId,
   isLoading,
@@ -35,7 +37,9 @@ export function SessionSidebar({
           <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
             Sessions
           </h2>
-          <p className="mt-1 text-xs text-slate-500">Recorded SQLite timelines</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {project ? `${project.name} workspace timeline` : "Recorded SQLite timelines"}
+          </p>
         </div>
         <button
           type="button"
@@ -50,6 +54,17 @@ export function SessionSidebar({
         <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">Total</div>
         <div className="mt-1 text-lg font-semibold text-white">{sessions.length}</div>
       </div>
+
+      {project ? (
+        <div
+          className="mb-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3"
+          title={`Project: ${project.projectPath}\nDatabase: ${project.dbPath}`}
+        >
+          <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">Project</div>
+          <div className="mt-1 truncate text-sm font-semibold text-white">{project.name}</div>
+          <div className="mt-1 truncate text-[11px] text-slate-400">{project.projectPath}</div>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <p className="text-sm text-slate-400">Loading sessions...</p>

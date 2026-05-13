@@ -33,12 +33,27 @@ export interface SessionSummary {
   latestSummary: string;
 }
 
+export interface ProjectContext {
+  name: string;
+  projectPath: string;
+  dbPath: string;
+}
+
 export interface SessionsResponse {
   sessionIds: string[];
   sessions: SessionSummary[];
+  project?: ProjectContext;
 }
 
 export interface SessionFramesResponse {
   sessionId: string;
   frames: Frame[];
+}
+
+export interface Note {
+  id: number;
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
 }

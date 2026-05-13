@@ -1,6 +1,6 @@
 import express from "express";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { openFrameStore, resolveDavmPaths, type DavmRuntimeOptions } from "./db";
 import { NoteStore } from "./notes";
 import { runFork, runReplay } from "./replay";
@@ -24,6 +24,11 @@ export function createServer(options: ServerOptions = {}) {
       response.json({
         sessionIds: sessions.map((session) => session.sessionId),
         sessions,
+        project: {
+          name: basename(paths.projectPath),
+          projectPath: paths.projectPath,
+          dbPath: paths.dbPath,
+        },
       });
     } finally {
       db.close();
