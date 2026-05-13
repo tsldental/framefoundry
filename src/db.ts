@@ -599,7 +599,7 @@ function summarizeLatestFrame(frame: Frame | null): string {
 
   if (frame.frameType === "llm_turn") {
     const prefix = frame.role === "assistant" ? "Assistant" : frame.role === "user" ? "User" : "Turn";
-    return `${prefix}: ${truncateString(extractStringFromFrameContent(frame), 96)}`;
+    return `${prefix}: ${extractStringFromFrameContent(frame)}`;
   }
 
   if (frame.frameType === "tool_call") {
@@ -607,10 +607,10 @@ function summarizeLatestFrame(frame: Frame | null): string {
   }
 
   if (frame.frameType === "tool_result") {
-    return `Tool result: ${truncateString(stringifyJson(extractObjectField(frame.content, "result")), 96)}`;
+    return `Tool result: ${stringifyJson(extractObjectField(frame.content, "result"))}`;
   }
 
-  return `System: ${truncateString(stringifyJson(frame.content), 96)}`;
+  return `System: ${stringifyJson(frame.content)}`;
 }
 
 function extractStringFromFrameContent(frame: Frame): string {
