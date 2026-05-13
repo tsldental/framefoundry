@@ -1,0 +1,27 @@
+{
+  "name": "davm",
+  "version": "0.1.0",
+  "description": "Deterministic Agent Virtual Machine for recording and replaying agent sessions.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "demo": "node dist/index.js"
+  },
+  "keywords": [
+    "agent",
+    "deterministic",
+    "replay",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@github/copilot-sdk": "^1.0.0-beta.4",
+    "better-sqlite3": "^12.10.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}
