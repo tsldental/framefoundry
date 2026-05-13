@@ -1,0 +1,61 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Non-Linear Debugging in framefoundry</title>
+  <desc id="desc">A branching session timeline showing recorded frames and multiple forks.</desc>
+  <defs>
+    <linearGradient id="bg" x1="120" y1="60" x2="1180" y2="660" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="148" y1="244" x2="480" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="628" y1="138" x2="958" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="emerald" x1="628" y1="452" x2="958" y2="544" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#34D399" stop-opacity="0.07"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="720" rx="32" fill="url(#bg)"/>
+  <rect x="32" y="32" width="1216" height="656" rx="28" stroke="#1E293B"/>
+
+  <text x="92" y="98" fill="#8B5CF6" font-size="18" font-family="Segoe UI, Arial, sans-serif" letter-spacing="4">NON-LINEAR DEBUGGING</text>
+  <text x="92" y="146" fill="#F8FAFC" font-size="42" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Rewind. Inspect. Fork. Refactor.</text>
+  <text x="92" y="184" fill="#94A3B8" font-size="20" font-family="Segoe UI, Arial, sans-serif">framefoundry lets you branch from any historical frame instead of re-running the entire session from scratch.</text>
+
+  <path d="M160 360H1110" stroke="#334155" stroke-width="8" stroke-linecap="round" stroke-dasharray="1 18"/>
+  <circle cx="250" cy="360" r="18" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
+  <circle cx="430" cy="360" r="18" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
+  <circle cx="610" cy="360" r="22" fill="#082F49" stroke="#22D3EE" stroke-width="6"/>
+  <circle cx="790" cy="360" r="18" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
+  <circle cx="970" cy="360" r="18" fill="#0F172A" stroke="#38BDF8" stroke-width="5"/>
+
+  <text x="222" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">user prompt</text>
+  <text x="388" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">tool call</text>
+  <text x="548" y="410" fill="#67E8F9" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">selected frame</text>
+  <text x="742" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">assistant</text>
+  <text x="936" y="410" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">result</text>
+
+  <path d="M610 338V202C610 188 622 176 636 176H820" stroke="#8B5CF6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M610 382V516C610 530 622 542 636 542H820" stroke="#34D399" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="820" y="128" width="286" height="96" rx="22" fill="url(#violet)" stroke="#6D28D9"/>
+  <text x="850" y="168" fill="#C4B5FD" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">FORK A</text>
+  <text x="850" y="202" fill="#F8FAFC" font-size="26" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Try a new prompt</text>
+
+  <rect x="820" y="494" width="286" height="96" rx="22" fill="url(#emerald)" stroke="#059669"/>
+  <text x="850" y="534" fill="#6EE7B7" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">FORK B</text>
+  <text x="850" y="568" fill="#F8FAFC" font-size="26" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Refactor the reasoning</text>
+
+  <rect x="122" y="240" width="356" height="84" rx="22" fill="url(#cyan)" stroke="#155E75"/>
+  <text x="152" y="274" fill="#67E8F9" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">ORIGINAL SESSION</text>
+  <text x="152" y="306" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Deterministic recorded timeline</text>
+
+  <rect x="140" y="542" width="470" height="84" rx="22" fill="#0B1220" stroke="#1E293B"/>
+  <text x="170" y="576" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">branch_root_frame_id preserves lineage</text>
+  <text x="170" y="606" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">Every fork remembers exactly where the alternative path began.</text>
+</svg>

@@ -1,0 +1,71 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">framefoundry architecture overview</title>
+  <desc id="desc">A diagram showing recording, storage, replay, and visualization in framefoundry.</desc>
+  <defs>
+    <linearGradient id="bg" x1="120" y1="40" x2="1160" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="cyanGlow" x1="220" y1="150" x2="540" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="violetGlow" x1="470" y1="360" x2="810" y2="580" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="emeraldGlow" x1="820" y1="150" x2="1100" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#34D399" stop-opacity="0.06"/>
+    </linearGradient>
+    <filter id="shadow" x="-40" y="-40" width="1360" height="800" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" rx="32" fill="url(#bg)"/>
+  <rect x="32" y="32" width="1216" height="656" rx="28" stroke="#1E293B"/>
+
+  <text x="90" y="104" fill="#22D3EE" font-size="18" font-family="Segoe UI, Arial, sans-serif" letter-spacing="4">DETERMINISTIC AGENT VIRTUAL MACHINE</text>
+  <text x="90" y="152" fill="#F8FAFC" font-size="42" font-weight="700" font-family="Segoe UI, Arial, sans-serif">framefoundry architecture</text>
+  <text x="90" y="190" fill="#94A3B8" font-size="20" font-family="Segoe UI, Arial, sans-serif">Record every agent step, persist it in SQLite, and replay or fork reasoning without losing state history.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="96" y="244" width="300" height="190" rx="24" fill="url(#cyanGlow)" stroke="#155E75"/>
+    <text x="126" y="290" fill="#67E8F9" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">LIVE AGENT RUNTIME</text>
+    <text x="126" y="334" fill="#F8FAFC" font-size="30" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Copilot SDK hooks</text>
+    <text x="126" y="372" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">- user prompts</text>
+    <text x="126" y="402" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">- tool calls and results</text>
+    <text x="126" y="432" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">- assistant messages</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="490" y="244" width="300" height="252" rx="24" fill="url(#violetGlow)" stroke="#5B21B6"/>
+    <text x="520" y="290" fill="#C4B5FD" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">SNAPSHOT LAYER</text>
+    <text x="520" y="334" fill="#F8FAFC" font-size="30" font-weight="700" font-family="Segoe UI, Arial, sans-serif">SQLite FrameStore</text>
+    <text x="520" y="372" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif">frames</text>
+    <text x="520" y="402" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">ordered llm_turn, tool_call, tool_result, system_event</text>
+    <text x="520" y="438" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif">tool_registry_entries</text>
+    <text x="520" y="468" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">captured tool inputs and outputs for deterministic replay</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="884" y="244" width="300" height="190" rx="24" fill="url(#emeraldGlow)" stroke="#047857"/>
+    <text x="914" y="290" fill="#6EE7B7" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">REPLAY + VISUALIZE</text>
+    <text x="914" y="334" fill="#F8FAFC" font-size="30" font-weight="700" font-family="Segoe UI, Arial, sans-serif">CLI + Dashboard</text>
+    <text x="914" y="372" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">- replay sessions</text>
+    <text x="914" y="402" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">- fork from any frame</text>
+    <text x="914" y="432" fill="#CBD5E1" font-size="18" font-family="Segoe UI, Arial, sans-serif">- inspect cognitive snapshots</text>
+  </g>
+
+  <path d="M396 338H470" stroke="#475569" stroke-width="6" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <path d="M790 338H864" stroke="#475569" stroke-width="6" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <path d="M1034 434V536H640V516" stroke="#334155" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+
+  <rect x="364" y="550" width="552" height="92" rx="20" fill="#0B1220" stroke="#1E293B"/>
+  <text x="396" y="590" fill="#F8FAFC" font-size="24" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Non-Linear Debugging</text>
+  <text x="396" y="620" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">Rewind and refactor agent reasoning by forking from any historical frame.</text>
+</svg>

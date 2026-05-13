@@ -9,6 +9,10 @@ It captures every meaningful step of an agent session as a persistent SQLite tim
 - **fork** execution from an earlier frame and continue in a new direction
 - **inspect** the full cognitive timeline in a local visualizer
 
+<p align="center">
+  <img src="docs/images/framefoundry-architecture.svg" alt="framefoundry architecture overview" width="900">
+</p>
+
 ## Why framefoundry exists
 
 Modern agent workflows are powerful, but they are hard to debug. Once a tool call has executed or a model response has streamed back, the exact execution path is often gone.
@@ -45,6 +49,10 @@ framefoundry turns branching into **Non-Linear Debugging**: developers can **rew
 
 Any selected frame can become a branch point. A fork clones the historical state up to the selected frame, tags the new branch with `branch_root_frame_id`, and then continues from there with a new prompt.
 
+<p align="center">
+  <img src="docs/images/non-linear-debugging.svg" alt="Branching and forking from a historical frame in framefoundry" width="900">
+</p>
+
 ### Local visualizer
 
 The included React dashboard provides:
@@ -55,6 +63,10 @@ The included React dashboard provides:
 - tool call / tool result grouping
 - raw JSON inspection
 - frame selection and forking from the UI
+
+<p align="center">
+  <img src="docs/images/visualizer-snapshots.svg" alt="framefoundry visualizer showing session tree and cognitive snapshots" width="900">
+</p>
 
 ## Architecture
 

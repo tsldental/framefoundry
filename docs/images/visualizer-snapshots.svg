@@ -1,0 +1,57 @@
+<svg width="1280" height="760" viewBox="0 0 1280 760" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">framefoundry visualizer layout</title>
+  <desc id="desc">A stylized mockup of the session sidebar and cognitive snapshot timeline.</desc>
+  <defs>
+    <linearGradient id="bg" x1="90" y1="42" x2="1180" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="120" y1="140" x2="1180" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#0B1220" stop-opacity="0.98"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="760" rx="32" fill="url(#bg)"/>
+  <rect x="32" y="32" width="1216" height="696" rx="28" stroke="#1E293B"/>
+
+  <text x="88" y="96" fill="#22D3EE" font-size="18" font-family="Segoe UI, Arial, sans-serif" letter-spacing="4">LOCAL VISUALIZER</text>
+  <text x="88" y="144" fill="#F8FAFC" font-size="42" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Cognitive Snapshot Explorer</text>
+  <text x="88" y="182" fill="#94A3B8" font-size="20" font-family="Segoe UI, Arial, sans-serif">Inspect sessions as a tree, open frame timelines, and fork alternative reasoning paths from the UI.</text>
+
+  <rect x="86" y="226" width="1108" height="446" rx="28" fill="url(#panel)" stroke="#1E293B"/>
+  <rect x="112" y="252" width="292" height="394" rx="22" fill="#0B1220" stroke="#1E293B"/>
+  <rect x="432" y="252" width="736" height="394" rx="22" fill="#0B1220" stroke="#1E293B"/>
+
+  <text x="138" y="292" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">SESSIONS</text>
+  <rect x="138" y="320" width="240" height="88" rx="18" fill="#082F49" stroke="#0891B2"/>
+  <text x="160" y="352" fill="#F8FAFC" font-size="22" font-weight="700" font-family="Segoe UI, Arial, sans-serif">root-session</text>
+  <text x="160" y="382" fill="#A5F3FC" font-size="15" font-family="Segoe UI, Arial, sans-serif">Explain deterministic replay...</text>
+
+  <path d="M164 432H184V490H204" stroke="#475569" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="204" y="462" width="174" height="74" rx="18" fill="#1E1B4B" stroke="#6D28D9"/>
+  <text x="226" y="492" fill="#F8FAFC" font-size="19" font-weight="700" font-family="Segoe UI, Arial, sans-serif">fork-session</text>
+  <text x="226" y="518" fill="#C4B5FD" font-size="14" font-family="Segoe UI, Arial, sans-serif">Forked at frame #42</text>
+
+  <text x="458" y="292" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif" letter-spacing="3">ACTIVE SESSION</text>
+
+  <rect x="458" y="320" width="214" height="88" rx="18" fill="#082F49" stroke="#0E7490"/>
+  <text x="480" y="352" fill="#67E8F9" font-size="14" font-family="Segoe UI, Arial, sans-serif" letter-spacing="2">OPENING SNAPSHOT</text>
+  <text x="480" y="384" fill="#F8FAFC" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Initial user intent</text>
+
+  <rect x="692" y="320" width="214" height="88" rx="18" fill="#052E16" stroke="#047857"/>
+  <text x="714" y="352" fill="#6EE7B7" font-size="14" font-family="Segoe UI, Arial, sans-serif" letter-spacing="2">LATEST CHECKPOINT</text>
+  <text x="714" y="384" fill="#F8FAFC" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Assistant summary</text>
+
+  <rect x="926" y="320" width="214" height="88" rx="18" fill="#2E1065" stroke="#7C3AED"/>
+  <text x="948" y="352" fill="#C4B5FD" font-size="14" font-family="Segoe UI, Arial, sans-serif" letter-spacing="2">BRANCH CONTEXT</text>
+  <text x="948" y="384" fill="#F8FAFC" font-size="18" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Fork lineage</text>
+
+  <rect x="458" y="438" width="650" height="82" rx="20" fill="#0F172A" stroke="#334155"/>
+  <text x="482" y="470" fill="#BAE6FD" font-size="15" font-family="Segoe UI, Arial, sans-serif" letter-spacing="2">FRAME #17 USER TURN</text>
+  <text x="482" y="500" fill="#F8FAFC" font-size="20" font-weight="700" font-family="Segoe UI, Arial, sans-serif">Show me the previous tool result and explain why it mattered.</text>
+
+  <rect x="560" y="540" width="470" height="78" rx="20" fill="#111827" stroke="#10B981"/>
+  <text x="584" y="572" fill="#6EE7B7" font-size="15" font-family="Segoe UI, Arial, sans-serif" letter-spacing="2">TOOL RESULT</text>
+  <text x="584" y="602" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif">Nested under the call with a concise JSON summary.</text>
+</svg>
