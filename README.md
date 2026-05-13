@@ -111,6 +111,119 @@ Set-Location 'C:\Users\Todd\dAVM'
 npm run build
 ```
 
+## Using framefoundry on a real project today
+
+framefoundry can already be used against another project folder, but the current workflow is still **manual**.
+
+The key idea is:
+
+- **framefoundry repo** = the runtime, recorder, replay engine, and visualizer
+- **your project folder** = the working directory the agent operates in
+
+Today, the simplest way to use framefoundry on a real project is to launch the built CLI and server **from your project directory** while pointing to the compiled framefoundry files with an absolute path.
+
+### What happens in a real-project run
+
+When you do this correctly:
+
+1. the agent runs with **your project folder** as its working directory
+2. `davm.sqlite` is created in **your project folder**
+3. the visualizer reads that project-specific SQLite file
+4. forks and replays stay attached to that same project timeline
+
+### Real-project quickstart
+
+#### 1. Build framefoundry once
+
+From the framefoundry repo:
+
+```powershell
+Set-Location 'C:\Users\Todd\dAVM'
+npm install
+npm --prefix visualizer install
+npm run build
+```
+
+#### 2. Copy `schema.sql` into the target project root
+
+From a new terminal, go to the project you actually want to work on and copy the schema file there:
+
+```powershell
+Set-Location 'C:\path\to\your-project'
+Copy-Item 'C:\Users\Todd\dAVM\schema.sql' '.\schema.sql'
+```
+
+This is required in the current version because the runtime resolves `schema.sql` relative to the current working directory.
+
+#### 3. Record a session from the target project root
+
+Stay in your project folder and run the compiled framefoundry CLI by absolute path:
+
+```powershell
+Set-Location 'C:\path\to\your-project'
+node 'C:\Users\Todd\dAVM\dist\index.js' record "Inspect this project and propose the next build step."
+```
+
+That run will:
+
+- use your project folder as the working directory
+- create `davm.sqlite` in your project root
+- record the session into that project-local database
+
+#### 4. Start the API bridge against the same project database
+
+In another terminal, stay in the project root and start the server from there:
+
+```powershell
+Set-Location 'C:\path\to\your-project'
+node 'C:\Users\Todd\dAVM\dist\server.js'
+```
+
+Because the server is started from the project root, it will read that project's `davm.sqlite`.
+
+#### 5. Start the visualizer from the framefoundry repo
+
+In a third terminal:
+
+```powershell
+Set-Location 'C:\Users\Todd\dAVM'
+npm run visualizer:dev
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
+You should now see the sessions recorded for that project.
+
+### Recommended terminal layout
+
+For the current version, the cleanest setup is:
+
+1. **Terminal A** — your project root, running `record`
+2. **Terminal B** — your project root, running `server.js`
+3. **Terminal C** — framefoundry repo, running `visualizer:dev`
+
+### What is manual right now
+
+framefoundry does **not** yet automatically attach itself to a normal GitHub Copilot chat window or every Copilot CLI session on your machine.
+
+At the moment you must:
+
+- launch the session through framefoundry's CLI
+- keep a copy of `schema.sql` in the project root
+- start the API bridge from the same project folder whose `davm.sqlite` you want to inspect
+
+### Current limitations
+
+- The default runtime assumes `schema.sql` is present in the current working directory.
+- The visualizer only shows the database exposed by the currently running API bridge.
+- Real-project onboarding is usable today, but it is not yet a one-command experience.
+
+The next natural improvement is a dedicated `--project-path` or `--db-path` workflow so framefoundry can target any folder without the schema-copy step.
+
 ## CLI usage
 
 The CLI entry point is `davm`.
