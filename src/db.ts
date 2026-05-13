@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export type JsonValue =
   | string
@@ -96,10 +96,19 @@ interface FrameRow {
   created_at: string;
 }
 
-export interface FrameStoreOptions {
+export interface DavmRuntimeOptions {
+  projectPath?: string;
   dbPath?: string;
   schemaPath?: string;
 }
+
+export interface DavmResolvedPaths {
+  projectPath: string;
+  dbPath: string;
+  schemaPath: string;
+}
+
+export interface FrameStoreOptions extends DavmRuntimeOptions {}
 
 export interface SessionSummary {
   sessionId: string;
@@ -160,8 +169,7 @@ export class FrameStore {
   private readonly selectRegistryEntriesBySessionStatement: Database.Statement;
 
   constructor(options: FrameStoreOptions = {}) {
-    const dbPath = resolve(options.dbPath ?? "davm.sqlite");
-    const schemaPath = resolve(options.schemaPath ?? "schema.sql");
+    const { dbPath, schemaPath } = resolveDavmPaths(options);
 
     ensureParentDirectory(dbPath);
 
@@ -514,12 +522,45 @@ export function openFrameStore(options: FrameStoreOptions = {}): FrameStore {
   return new FrameStore(options);
 }
 
+export function resolveDavmPaths(options: DavmRuntimeOptions = {}): DavmResolvedPaths {
+  const projectPath = resolve(options.projectPath ?? process.cwd());
+  const dbPath = resolve(options.dbPath ?? join(projectPath, "davm.sqlite"));
+  const schemaPath = resolveSchemaPath(options.schemaPath, projectPath);
+
+  return {
+    projectPath,
+    dbPath,
+    schemaPath,
+  };
+}
+
 function ensureParentDirectory(filePath: string): void {
   const parentDirectory = dirname(filePath);
 
   if (!existsSync(parentDirectory)) {
     mkdirSync(parentDirectory, { recursive: true });
   }
+}
+
+function resolveSchemaPath(explicitSchemaPath: string | undefined, projectPath: string): string {
+  if (explicitSchemaPath) {
+    return resolve(explicitSchemaPath);
+  }
+
+  const candidatePaths = [
+    join(projectPath, "schema.sql"),
+    join(resolve(__dirname, ".."), "schema.sql"),
+  ];
+
+  for (const candidatePath of candidatePaths) {
+    if (existsSync(candidatePath)) {
+      return resolve(candidatePath);
+    }
+  }
+
+  throw new Error(
+    `Could not find schema.sql. Checked ${candidatePaths.join(" and ")}. Pass --schema-path to specify it explicitly.`,
+  );
 }
 
 function serializeJson(value: JsonValue): string {

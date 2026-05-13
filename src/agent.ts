@@ -1,5 +1,12 @@
 import { CopilotClient, approveAll, defineTool, type CopilotSession } from "@github/copilot-sdk";
-import { openFrameStore, type JsonValue, type ToolRegistryEntry, type Frame } from "./db";
+import {
+  openFrameStore,
+  resolveDavmPaths,
+  type DavmRuntimeOptions,
+  type JsonValue,
+  type ToolRegistryEntry,
+  type Frame,
+} from "./db";
 
 const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -48,11 +55,15 @@ export function createSearchDocsTool() {
   });
 }
 
-export async function runAgentDemo(prompt: string): Promise<AgentDemoResult> {
-  const db = openFrameStore();
+export async function runAgentDemo(
+  prompt: string,
+  options: DavmRuntimeOptions = {},
+): Promise<AgentDemoResult> {
+  const paths = resolveDavmPaths(options);
+  const db = openFrameStore(paths);
   const sessionStateById = new Map<string, SessionRecordingState>();
   const client = new CopilotClient({
-    cwd: process.cwd(),
+    cwd: paths.projectPath,
   });
 
   let activeSessionId: string | undefined;
@@ -62,7 +73,7 @@ export async function runAgentDemo(prompt: string): Promise<AgentDemoResult> {
   try {
     session = await client.createSession({
       onPermissionRequest: approveAll,
-      workingDirectory: process.cwd(),
+      workingDirectory: paths.projectPath,
       tools: [createSearchDocsTool()],
       hooks: {
         onUserPromptSubmitted(input, invocation) {

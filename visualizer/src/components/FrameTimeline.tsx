@@ -137,12 +137,20 @@ function FrameCard({
   const [showRawJson, setShowRawJson] = useState(false);
   const isSelected = selectedFrameId === frame.id;
   const isToolResultSelected = toolResult ? selectedFrameId === toolResult.id : false;
+  const frameContent = formatPrimaryContent(frame);
 
   if (frame.frameType === "tool_call") {
+    const toolArgsSummary = `args=${truncateString(JSON.stringify(extractValueField(frame.content, "args")))}`;
+    const toolArgsTooltip = JSON.stringify(extractValueField(frame.content, "args"), null, 2);
+    const toolResultTooltip = toolResult
+      ? JSON.stringify(extractValueField(toolResult.content, "result"), null, 2)
+      : undefined;
+
     return (
       <div className="flex justify-center">
         <article
           onClick={() => onSelectFrame(frame)}
+          title={toolArgsTooltip}
           className={`w-full max-w-3xl cursor-pointer rounded-3xl border bg-slate-950/80 p-5 text-center shadow-lg shadow-slate-950/30 transition ${
             isSelected ? "border-cyan-400 shadow-cyan-950/20" : "border-amber-500/20"
           }`}
@@ -152,11 +160,12 @@ function FrameCard({
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10 text-lg">
               💬
             </span>
-            <div className="rounded-2xl border border-amber-500/20 bg-slate-900/80 px-4 py-3 font-mono text-left text-[13px] leading-6 text-amber-100">
+            <div
+              className="rounded-2xl border border-amber-500/20 bg-slate-900/80 px-4 py-3 font-mono text-left text-[13px] leading-6 text-amber-100"
+              title={toolArgsTooltip}
+            >
               <div className="font-semibold">{frame.toolName ?? "tool_call"}</div>
-              <div className="mt-1 text-slate-300">
-                args={truncateString(JSON.stringify(extractValueField(frame.content, "args")))}
-              </div>
+              <div className="mt-1 text-slate-300">{toolArgsSummary}</div>
             </div>
           </div>
 
@@ -166,14 +175,18 @@ function FrameCard({
                 event.stopPropagation();
                 onSelectFrame(toolResult);
               }}
-              className={`mt-4 ml-auto mr-auto max-w-2xl cursor-pointer rounded-2xl border bg-slate-900/90 p-4 text-left transition ${
-                isToolResultSelected ? "border-cyan-400 shadow-lg shadow-cyan-950/20" : "border-slate-800"
-              }`}
-            >
+                className={`mt-4 ml-auto mr-auto max-w-2xl cursor-pointer rounded-2xl border bg-slate-900/90 p-4 text-left transition ${
+                  isToolResultSelected ? "border-cyan-400 shadow-lg shadow-cyan-950/20" : "border-slate-800"
+                }`}
+                title={toolResultTooltip}
+              >
               <div className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">
                 Tool Result
               </div>
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-slate-200">
+              <div
+                className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-slate-200"
+                title={toolResultTooltip}
+              >
                 {truncateString(JSON.stringify(extractValueField(toolResult.content, "result")), 220)}
               </div>
               <FrameFooter frame={toolResult} showRawJson={showRawJson} />
@@ -195,14 +208,18 @@ function FrameCard({
   return (
     <article
       onClick={() => onSelectFrame(frame)}
+      title={frameContent}
       className={`cursor-pointer rounded-3xl border bg-slate-950/80 p-5 shadow-lg transition ${alignmentClass} ${accentClass} ${
         isSelected ? "border-cyan-400 shadow-cyan-950/20" : ""
       }`}
     >
       <FrameHeader frame={frame} showRawJson={showRawJson} onToggleRawJson={setShowRawJson} />
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
-        <pre className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">
-          {formatPrimaryContent(frame)}
+        <pre
+          className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-6 text-slate-100"
+          title={frameContent}
+        >
+          {frameContent}
         </pre>
       </div>
       {showRawJson ? <RawJsonPanels frame={frame} /> : null}
@@ -320,7 +337,7 @@ function SnapshotCard({
         : "text-violet-300";
 
   return (
-    <div className={`rounded-2xl border p-4 ${accentClass}`}>
+    <div className={`rounded-2xl border p-4 ${accentClass}`} title={value}>
       <div className={`text-[11px] uppercase tracking-[0.24em] ${labelClass}`}>{label}</div>
       <div className="mt-2 text-sm leading-6 text-slate-100">{value}</div>
     </div>

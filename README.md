@@ -113,14 +113,14 @@ npm run build
 
 ## Using framefoundry on a real project today
 
-framefoundry can already be used against another project folder, but the current workflow is still **manual**.
+framefoundry can now target another project folder directly with `--project`, and it can start the built visualizer and API bridge together with a single command.
 
 The key idea is:
 
 - **framefoundry repo** = the runtime, recorder, replay engine, and visualizer
 - **your project folder** = the working directory the agent operates in
 
-Today, the simplest way to use framefoundry on a real project is to launch the built CLI and server **from your project directory** while pointing to the compiled framefoundry files with an absolute path.
+Today, the simplest way to use framefoundry on a real project is to build it once, then point the CLI at your project with `--project`.
 
 ### What happens in a real-project run
 
@@ -144,67 +144,46 @@ npm --prefix visualizer install
 npm run build
 ```
 
-#### 2. Copy `schema.sql` into the target project root
+#### 2. Start the local app for your project
 
-From a new terminal, go to the project you actually want to work on and copy the schema file there:
-
-```powershell
-Set-Location 'C:\path\to\your-project'
-Copy-Item 'C:\Users\Todd\dAVM\schema.sql' '.\schema.sql'
-```
-
-This is required in the current version because the runtime resolves `schema.sql` relative to the current working directory.
-
-#### 3. Record a session from the target project root
-
-Stay in your project folder and run the compiled framefoundry CLI by absolute path:
-
-```powershell
-Set-Location 'C:\path\to\your-project'
-node 'C:\Users\Todd\dAVM\dist\index.js' record "Inspect this project and propose the next build step."
-```
-
-That run will:
-
-- use your project folder as the working directory
-- create `davm.sqlite` in your project root
-- record the session into that project-local database
-
-#### 4. Start the API bridge against the same project database
-
-In another terminal, stay in the project root and start the server from there:
-
-```powershell
-Set-Location 'C:\path\to\your-project'
-node 'C:\Users\Todd\dAVM\dist\server.js'
-```
-
-Because the server is started from the project root, it will read that project's `davm.sqlite`.
-
-#### 5. Start the visualizer from the framefoundry repo
-
-In a third terminal:
+From any terminal, run:
 
 ```powershell
 Set-Location 'C:\Users\Todd\dAVM'
-npm run visualizer:dev
+node dist\index.js start --project 'C:\path\to\your-project' --open
 ```
 
-Then open:
+That command:
+
+- starts the API bridge
+- serves the built visualizer on the same port
+- opens the browser for you
+- points the database at `C:\path\to\your-project\davm.sqlite`
+- automatically uses the packaged `schema.sql` if your project does not already have one
+
+By default the local app runs at:
 
 ```text
-http://localhost:5173
+http://localhost:3001
 ```
 
-You should now see the sessions recorded for that project.
+#### 3. Record a session against that project
+
+In another terminal:
+
+```powershell
+Set-Location 'C:\Users\Todd\dAVM'
+node dist\index.js record --project 'C:\path\to\your-project' "Inspect this project and propose the next build step."
+```
+
+That run will use your project folder as the agent working directory and record into that project's `davm.sqlite`.
 
 ### Recommended terminal layout
 
-For the current version, the cleanest setup is:
+For the easiest ongoing workflow:
 
-1. **Terminal A** — your project root, running `record`
-2. **Terminal B** — your project root, running `server.js`
-3. **Terminal C** — framefoundry repo, running `visualizer:dev`
+1. **Terminal A** — `node dist\index.js start --project 'C:\path\to\your-project' --open`
+2. **Terminal B** — `node dist\index.js record --project 'C:\path\to\your-project' "..."`
 
 ### What is manual right now
 
@@ -213,16 +192,15 @@ framefoundry does **not** yet automatically attach itself to a normal GitHub Cop
 At the moment you must:
 
 - launch the session through framefoundry's CLI
-- keep a copy of `schema.sql` in the project root
-- start the API bridge from the same project folder whose `davm.sqlite` you want to inspect
+- keep the local app running while you want to browse the project timeline
 
 ### Current limitations
 
-- The default runtime assumes `schema.sql` is present in the current working directory.
-- The visualizer only shows the database exposed by the currently running API bridge.
-- Real-project onboarding is usable today, but it is not yet a one-command experience.
+- The visualizer only shows the database exposed by the currently running local app.
+- Recording still happens through framefoundry's CLI, not by auto-attaching to every Copilot session.
+- `davm start` serves the built visualizer, so you should run `npm run build` after making frontend changes.
 
-The next natural improvement is a dedicated `--project-path` or `--db-path` workflow so framefoundry can target any folder without the schema-copy step.
+The next natural improvement is a deeper Copilot integration that can attach to a live coding workflow with less manual launching.
 
 ## CLI usage
 
@@ -232,6 +210,12 @@ The CLI entry point is `davm`.
 
 ```powershell
 node dist\index.js record "Explain deterministic replay."
+```
+
+To record against a specific project:
+
+```powershell
+node dist\index.js record --project 'C:\path\to\your-project' "Build the next feature."
 ```
 
 ### Replay a session
@@ -246,16 +230,30 @@ node dist\index.js replay <sessionId>
 node dist\index.js log <sessionId>
 ```
 
+### Start the local app
+
+```powershell
+node dist\index.js start --project 'C:\path\to\your-project' --open
+```
+
+### Start only the API bridge
+
+```powershell
+node dist\index.js serve --project 'C:\path\to\your-project' --port 3001
+```
+
 ## Running the visualizer
 
-### Start the API bridge
+If you use `davm start`, you do not need a separate Vite dev server. The built visualizer is served automatically on the same port as the API bridge.
+
+### Start the API bridge manually
 
 ```powershell
 Set-Location 'C:\Users\Todd\dAVM'
 npm run serve
 ```
 
-### Start the frontend
+### Start the frontend in development mode
 
 In a second terminal:
 

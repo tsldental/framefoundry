@@ -74,6 +74,7 @@ export function SessionSidebar({
 function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTreeItemProps) {
   const isSelected = node.sessionId === selectedSessionId;
   const indent = node.depth * 16;
+  const tooltip = [node.sessionId, node.headline, node.latestSummary].join("\n\n");
 
   return (
     <div className="space-y-2">
@@ -89,6 +90,7 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
           marginLeft: `${indent}px`,
           width: `calc(100% - ${indent}px)`,
         }}
+        title={tooltip}
       >
         <div className="flex items-start gap-3">
           <div className="pt-0.5 font-mono text-xs text-cyan-400/80">

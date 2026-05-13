@@ -6,7 +6,14 @@ import {
   type Tool,
 } from "@github/copilot-sdk";
 import { createSearchDocsTool } from "./agent";
-import { openFrameStore, type Frame, type JsonValue, type ToolRegistryEntry } from "./db";
+import {
+  openFrameStore,
+  resolveDavmPaths,
+  type DavmRuntimeOptions,
+  type Frame,
+  type JsonValue,
+  type ToolRegistryEntry,
+} from "./db";
 
 const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -60,8 +67,12 @@ export interface ForkResult {
   registryEntries: ToolRegistryEntry[];
 }
 
-export async function runReplay(sessionId: string): Promise<ReplayResult> {
-  const db = openFrameStore();
+export async function runReplay(
+  sessionId: string,
+  options: DavmRuntimeOptions = {},
+): Promise<ReplayResult> {
+  const paths = resolveDavmPaths(options);
+  const db = openFrameStore(paths);
   const sourceFrames = db.listFrames(sessionId);
 
   if (sourceFrames.length === 0) {
@@ -79,7 +90,7 @@ export async function runReplay(sessionId: string): Promise<ReplayResult> {
     lastSubmittedPromptSource: null,
   };
   const client = new CopilotClient({
-    cwd: process.cwd(),
+    cwd: paths.projectPath,
   });
 
   let replaySessionId: string | undefined;
@@ -89,7 +100,7 @@ export async function runReplay(sessionId: string): Promise<ReplayResult> {
   try {
     session = await client.createSession({
       onPermissionRequest: approveAll,
-      workingDirectory: process.cwd(),
+      workingDirectory: paths.projectPath,
       tools: createReplayToolsForRecordedCalls(recordedToolCalls, replayState),
       hooks: {
         onUserPromptSubmitted(input, invocation) {
@@ -326,8 +337,10 @@ export async function runFork(
   originalSessionId: string,
   startFrameId: number,
   newPrompt: string,
+  options: DavmRuntimeOptions = {},
 ): Promise<ForkResult> {
-  const db = openFrameStore();
+  const paths = resolveDavmPaths(options);
+  const db = openFrameStore(paths);
   const sourceFrames = db.listFrames(originalSessionId);
 
   if (sourceFrames.length === 0) {
@@ -352,7 +365,7 @@ export async function runFork(
     lastSubmittedPromptSource: null,
   };
   const client = new CopilotClient({
-    cwd: process.cwd(),
+    cwd: paths.projectPath,
   });
 
   let forkSessionId: string | undefined;
@@ -362,7 +375,7 @@ export async function runFork(
   try {
     session = await client.createSession({
       onPermissionRequest: approveAll,
-      workingDirectory: process.cwd(),
+      workingDirectory: paths.projectPath,
       tools: [createSearchDocsTool()],
       hooks: {
         onUserPromptSubmitted(input, invocation) {

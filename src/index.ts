@@ -2,8 +2,10 @@
 
 import chalk from "chalk";
 import { Command } from "commander";
+import { spawn } from "node:child_process";
 import { runAgentDemo } from "./agent";
-import { openFrameStore, type Frame, type JsonValue } from "./db";
+import { openFrameStore, resolveDavmPaths, type DavmRuntimeOptions, type Frame, type JsonValue } from "./db";
+import { startServer } from "./server";
 import { runReplay } from "./replay";
 
 export * from "./db";
@@ -22,9 +24,13 @@ export async function runCli(argv = process.argv): Promise<void> {
   program
     .command("record")
     .description("Record a new agent run for the given prompt.")
+    .option("-p, --project <path>", "Project folder to record against")
+    .option("--db-path <path>", "Explicit SQLite database path")
+    .option("--schema-path <path>", "Explicit schema.sql path")
     .argument("<prompt>", "Prompt to send to the agent")
-    .action(async (prompt: string) => {
-      const result = await runAgentDemo(prompt);
+    .action(async (prompt: string, options: DavmCommandOptions) => {
+      const runtimeOptions = toRuntimeOptions(options);
+      const result = await runAgentDemo(prompt, runtimeOptions);
       console.log(
         `${chalk.green("Recorded session")} ${chalk.bold.cyan(result.sessionId)}`,
       );
@@ -33,9 +39,12 @@ export async function runCli(argv = process.argv): Promise<void> {
   program
     .command("replay")
     .description("Replay a recorded session deterministically from saved tool results.")
+    .option("-p, --project <path>", "Project folder that owns the recorded session")
+    .option("--db-path <path>", "Explicit SQLite database path")
+    .option("--schema-path <path>", "Explicit schema.sql path")
     .argument("<sessionId>", "Recorded session ID to replay")
-    .action(async (sessionId: string) => {
-      await runReplay(sessionId);
+    .action(async (sessionId: string, options: DavmCommandOptions) => {
+      await runReplay(sessionId, toRuntimeOptions(options));
       console.log(
         `${chalk.cyan("Replaying Session...")} ${chalk.bold.green("[SUCCESS]")}`,
       );
@@ -44,9 +53,12 @@ export async function runCli(argv = process.argv): Promise<void> {
   program
     .command("log")
     .description("Show the cognitive snapshot history for a recorded session.")
+    .option("-p, --project <path>", "Project folder that owns the recorded session")
+    .option("--db-path <path>", "Explicit SQLite database path")
+    .option("--schema-path <path>", "Explicit schema.sql path")
     .argument("<sessionId>", "Session ID to inspect")
-    .action((sessionId: string) => {
-      const db = openFrameStore();
+    .action((sessionId: string, options: DavmCommandOptions) => {
+      const db = openFrameStore(toRuntimeOptions(options));
 
       try {
         const frames = db.listFrames(sessionId);
@@ -67,7 +79,98 @@ export async function runCli(argv = process.argv): Promise<void> {
       }
     });
 
+  program
+    .command("serve")
+    .description("Start the API bridge for a project database.")
+    .option("-p, --project <path>", "Project folder to serve")
+    .option("--db-path <path>", "Explicit SQLite database path")
+    .option("--schema-path <path>", "Explicit schema.sql path")
+    .option("--port <number>", "Port for the API bridge", parsePort)
+    .action(async (options: DavmServeOptions) => {
+      const runtimeOptions = toRuntimeOptions(options);
+      const paths = resolveDavmPaths(runtimeOptions);
+      const port = options.port ?? 3001;
+
+      await startServer({
+        ...runtimeOptions,
+        port,
+      });
+
+      console.log(
+        `${chalk.green("Serving project database")} ${chalk.bold.cyan(paths.dbPath)} ${chalk.dim(`on http://localhost:${port}`)}`,
+      );
+    });
+
+  program
+    .command("start")
+    .description("Start framefoundry for a project with the built visualizer on one port.")
+    .option("-p, --project <path>", "Project folder to open")
+    .option("--db-path <path>", "Explicit SQLite database path")
+    .option("--schema-path <path>", "Explicit schema.sql path")
+    .option("--port <number>", "Port for the local app", parsePort)
+    .option("--open", "Open the app in the default browser")
+    .action(async (options: DavmStartOptions) => {
+      const runtimeOptions = toRuntimeOptions(options);
+      const paths = resolveDavmPaths(runtimeOptions);
+      const port = options.port ?? 3001;
+
+      await startServer({
+        ...runtimeOptions,
+        port,
+        serveVisualizer: true,
+      });
+
+      const appUrl = `http://localhost:${port}`;
+
+      console.log(`${chalk.green("framefoundry ready")} ${chalk.bold.cyan(appUrl)}`);
+      console.log(`${chalk.dim("Project")} ${paths.projectPath}`);
+      console.log(`${chalk.dim("Database")} ${paths.dbPath}`);
+
+      if (options.open) {
+        openBrowser(appUrl);
+      }
+    });
+
   await program.parseAsync(argv);
+}
+
+interface DavmCommandOptions {
+  project?: string;
+  dbPath?: string;
+  schemaPath?: string;
+}
+
+interface DavmServeOptions extends DavmCommandOptions {
+  port?: number;
+}
+
+interface DavmStartOptions extends DavmServeOptions {
+  open?: boolean;
+}
+
+function toRuntimeOptions(options: DavmCommandOptions): DavmRuntimeOptions {
+  return {
+    projectPath: options.project,
+    dbPath: options.dbPath,
+    schemaPath: options.schemaPath,
+  };
+}
+
+function parsePort(value: string): number {
+  const port = Number(value);
+
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error(`Invalid port "${value}"`);
+  }
+
+  return port;
+}
+
+function openBrowser(url: string): void {
+  spawn("cmd", ["/c", "start", "", url], {
+    detached: true,
+    stdio: "ignore",
+  }).unref();
 }
 
 function formatFrameLine(frame: Frame): string {
