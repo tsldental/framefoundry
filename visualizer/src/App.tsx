@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { FrameTimeline } from "./components/FrameTimeline";
+import { NotesApp } from "./components/NotesApp";
 import { SessionSidebar } from "./components/SessionSidebar";
 import type { Frame, SessionFramesResponse, SessionSummary, SessionsResponse } from "./types";
 
+type Tab = "sessions" | "notes";
+
 function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("sessions");
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [frames, setFrames] = useState<Frame[]>([]);
@@ -40,15 +44,16 @@ function App() {
       }
 
       const payload = (await response.json()) as SessionsResponse;
-      setSessions(payload.sessions);
+      const normalizedSessions = normalizeSessionsResponse(payload);
+      setSessions(normalizedSessions);
       setSelectedSessionId((currentSessionId) => {
         const nextSessionId = preferredSessionId ?? currentSessionId;
 
-        if (nextSessionId && payload.sessionIds.includes(nextSessionId)) {
+        if (nextSessionId && normalizedSessions.some((session) => session.sessionId === nextSessionId)) {
           return nextSessionId;
         }
 
-        return payload.sessionIds[0] ?? null;
+        return normalizedSessions[0]?.sessionId ?? null;
       });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
@@ -135,19 +140,42 @@ function App() {
                 dAVM Visualizer
               </p>
               <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">
-                Cognitive Snapshot Explorer
+                {activeTab === "sessions" ? "Cognitive Snapshot Explorer" : "Notes"}
               </h1>
             </div>
-            <button
-              type="button"
-              onClick={() => void loadSessions()}
-              className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
-            >
-              Refresh
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Tab switcher */}
+              <div className="flex rounded-full border border-slate-700 bg-slate-800/60 p-1">
+                {(["sessions", "notes"] as Tab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition ${
+                      activeTab === tab
+                        ? "bg-cyan-500/20 text-cyan-200 shadow"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              {activeTab === "sessions" && (
+                <button
+                  type="button"
+                  onClick={() => void loadSessions()}
+                  className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
+                >
+                  Refresh
+                </button>
+              )}
+            </div>
           </div>
           <p className="max-w-3xl text-sm leading-6 text-slate-300">
-            Inspect recorded sessions, compare live and replay frames, and browse the SQLite-backed timeline that powers dAVM.
+            {activeTab === "sessions"
+              ? "Inspect recorded sessions, compare live and replay frames, and browse the SQLite-backed timeline that powers dAVM."
+              : "Create and manage notes stored in the dAVM SQLite database."}
           </p>
         </header>
 
@@ -158,22 +186,28 @@ function App() {
         ) : null}
 
         <div className="grid flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <SessionSidebar
-            sessions={sessions}
-            selectedSessionId={selectedSessionId}
-            isLoading={isLoadingSessions}
-            onRefresh={() => void loadSessions()}
-            onSelectSession={setSelectedSessionId}
-          />
-          <FrameTimeline
-            sessionId={selectedSessionId}
-            session={selectedSession}
-            frames={frames}
-            isLoading={isLoadingFrames}
-            selectedFrameId={selectedFrameId}
-            onSelectFrame={(frame) => setSelectedFrameId(frame.id)}
-            onForkFromFrame={forkFromFrame}
-          />
+          {activeTab === "notes" ? (
+            <NotesApp />
+          ) : (
+            <>
+              <SessionSidebar
+                sessions={sessions}
+                selectedSessionId={selectedSessionId}
+                isLoading={isLoadingSessions}
+                onRefresh={() => void loadSessions()}
+                onSelectSession={setSelectedSessionId}
+              />
+              <FrameTimeline
+                sessionId={selectedSessionId}
+                session={selectedSession}
+                frames={frames}
+                isLoading={isLoadingFrames}
+                selectedFrameId={selectedFrameId}
+                onSelectFrame={(frame) => setSelectedFrameId(frame.id)}
+                onForkFromFrame={forkFromFrame}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -181,3 +215,52 @@ function App() {
 }
 
 export default App;
+
+function normalizeSessionsResponse(payload: SessionsResponse): SessionSummary[] {
+  if (Array.isArray(payload.sessions) && payload.sessions.length > 0) {
+    return payload.sessions.map((session) => normalizeSessionSummary(session));
+  }
+
+  if (Array.isArray(payload.sessionIds)) {
+    return payload.sessionIds.map((sessionId) =>
+      normalizeSessionSummary({
+        sessionId,
+        parentSessionId: null,
+        branchRootFrameId: null,
+        createdAt: "",
+        lastUpdatedAt: "",
+        frameCount: 0,
+        childCount: 0,
+        headline: "Recorded session",
+        latestSummary: "No session summary available from the current API response.",
+      }),
+    );
+  }
+
+  return [];
+}
+
+function normalizeSessionSummary(session: SessionSummary): SessionSummary {
+  return {
+    sessionId: typeof session.sessionId === "string" ? session.sessionId : String(session.sessionId),
+    parentSessionId: typeof session.parentSessionId === "string" ? session.parentSessionId : null,
+    branchRootFrameId:
+      typeof session.branchRootFrameId === "number" ? session.branchRootFrameId : null,
+    createdAt: typeof session.createdAt === "string" ? session.createdAt : "",
+    lastUpdatedAt:
+      typeof session.lastUpdatedAt === "string"
+        ? session.lastUpdatedAt
+        : typeof session.createdAt === "string"
+          ? session.createdAt
+          : "",
+    frameCount: typeof session.frameCount === "number" ? session.frameCount : 0,
+    childCount: typeof session.childCount === "number" ? session.childCount : 0,
+    headline: typeof session.headline === "string" && session.headline.trim()
+      ? session.headline
+      : "Recorded session",
+    latestSummary:
+      typeof session.latestSummary === "string" && session.latestSummary.trim()
+        ? session.latestSummary
+        : "No session summary available from the current API response.",
+  };
+}
