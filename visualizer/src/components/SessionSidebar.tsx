@@ -116,6 +116,13 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
   const indent = node.depth * 16;
   const tooltip = [node.sessionId, node.headline, node.latestSummary].join("\n\n");
   const timestamp = node.lastUpdatedAt || node.createdAt;
+  const isBranch = node.branchRootFrameId !== null;
+  const baseClass = isBranch
+    ? "border-violet-500/30 bg-violet-500/8 text-slate-100 hover:border-violet-400/40 hover:bg-violet-500/14"
+    : "border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-900";
+  const selectedClass = isBranch
+    ? "border-cyan-400/50 bg-violet-500/18 text-white shadow-lg shadow-violet-950/30"
+    : "border-cyan-400/40 bg-cyan-400/10 text-white shadow-lg shadow-cyan-950/30";
 
   return (
     <div className="space-y-2">
@@ -123,9 +130,7 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
         type="button"
         onClick={() => onSelectSession(node.sessionId)}
         className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-          isSelected
-            ? "border-cyan-400/40 bg-cyan-400/10 text-white shadow-lg shadow-cyan-950/30"
-            : "border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+          isSelected ? selectedClass : baseClass
         }`}
         style={{
           marginLeft: `${indent}px`,
@@ -148,6 +153,15 @@ function SessionTreeItem({ node, selectedSessionId, onSelectSession }: SessionTr
               <span className="rounded-full border border-slate-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-400">
                 {node.frameCount} frames
               </span>
+              {isBranch ? (
+                <span className="rounded-full border border-violet-400/30 bg-violet-400/15 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-violet-100">
+                  Forked
+                </span>
+              ) : (
+                <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-cyan-100">
+                  Root Path
+                </span>
+              )}
               {node.childCount > 0 ? (
                 <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-violet-200">
                   {node.childCount} branch{node.childCount === 1 ? "" : "es"}
