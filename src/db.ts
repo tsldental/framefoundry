@@ -214,10 +214,9 @@ export class FrameStore {
     `);
 
     this.selectSessionIdsStatement = this.db.prepare(`
-      SELECT session_id
+      SELECT DISTINCT session_id
       FROM frames
-      GROUP BY session_id
-      ORDER BY MAX(created_at) DESC, session_id ASC
+      ORDER BY created_at DESC
     `);
 
     this.nextSequenceStatement = this.db.prepare(`

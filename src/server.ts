@@ -1,5 +1,6 @@
 import express from "express";
 import { openFrameStore } from "./db";
+import { runReplay } from "./replay";
 
 export interface ServerOptions {
   port?: number;
@@ -30,6 +31,16 @@ export function createServer() {
       });
     } finally {
       db.close();
+    }
+  });
+
+  app.post("/api/sessions/:id/replay", async (request, response) => {
+    try {
+      const replayResult = await runReplay(request.params.id);
+      response.json(replayResult);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      response.status(500).json({ error: message });
     }
   });
 
