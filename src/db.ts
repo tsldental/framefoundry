@@ -101,6 +101,13 @@ export interface FrameStoreOptions {
   schemaPath?: string;
 }
 
+export interface SessionSummary {
+  sessionId: string;
+  parentSessionId: string | null;
+  branchRootFrameId: number | null;
+  createdAt: string;
+}
+
 export interface ToolRegistryEntry {
   toolCallId: string;
   sessionId: string;
@@ -127,12 +134,20 @@ interface ToolRegistryEntryRow {
   updated_at: string;
 }
 
+interface SessionSummaryRow {
+  session_id: string;
+  parent_session_id: string | null;
+  branch_root_frame_id: number | null;
+  created_at: string;
+}
+
 export class FrameStore {
   readonly db: Database.Database;
   private readonly insertFrameStatement: Database.Statement;
   private readonly selectFrameStatement: Database.Statement;
   private readonly selectFramesBySessionStatement: Database.Statement;
   private readonly selectSessionIdsStatement: Database.Statement;
+  private readonly selectSessionsStatement: Database.Statement;
   private readonly nextSequenceStatement: Database.Statement;
   private readonly upsertToolCallRegistryStatement: Database.Statement;
   private readonly updateToolResultRegistryStatement: Database.Statement;
@@ -217,6 +232,28 @@ export class FrameStore {
       SELECT DISTINCT session_id
       FROM frames
       ORDER BY created_at DESC
+    `);
+
+    this.selectSessionsStatement = this.db.prepare(`
+      WITH session_summaries AS (
+        SELECT
+          session_id,
+          MIN(created_at) AS created_at,
+          MIN(CASE
+            WHEN branch_root_frame_id IS NOT NULL THEN branch_root_frame_id
+          END) AS branch_root_frame_id
+        FROM frames
+        GROUP BY session_id
+      )
+      SELECT
+        session_summaries.session_id,
+        parent_frames.session_id AS parent_session_id,
+        session_summaries.branch_root_frame_id,
+        session_summaries.created_at
+      FROM session_summaries
+      LEFT JOIN frames AS parent_frames
+        ON parent_frames.id = session_summaries.branch_root_frame_id
+      ORDER BY session_summaries.created_at DESC, session_summaries.session_id DESC
     `);
 
     this.nextSequenceStatement = this.db.prepare(`
@@ -319,6 +356,11 @@ export class FrameStore {
   listSessionIds(): string[] {
     const rows = this.selectSessionIdsStatement.all() as Array<{ session_id: string }>;
     return rows.map((row) => row.session_id);
+  }
+
+  listSessions(): SessionSummary[] {
+    const rows = this.selectSessionsStatement.all() as SessionSummaryRow[];
+    return rows.map(mapSessionSummaryRow);
   }
 
   getRegistryEntry(toolCallId: string): ToolRegistryEntry | null {
@@ -492,5 +534,14 @@ function mapToolRegistryEntryRow(row: ToolRegistryEntryRow): ToolRegistryEntry {
     metadata: parseJson(row.metadata_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapSessionSummaryRow(row: SessionSummaryRow): SessionSummary {
+  return {
+    sessionId: row.session_id,
+    parentSessionId: row.parent_session_id,
+    branchRootFrameId: row.branch_root_frame_id,
+    createdAt: row.created_at,
   };
 }

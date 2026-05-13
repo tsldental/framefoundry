@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { FrameTimeline } from "./components/FrameTimeline";
 import { SessionSidebar } from "./components/SessionSidebar";
-import type { Frame, SessionFramesResponse, SessionsResponse } from "./types";
+import type { Frame, SessionFramesResponse, SessionSummary, SessionsResponse } from "./types";
 
 function App() {
-  const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [frames, setFrames] = useState<Frame[]>([]);
   const [selectedFrameId, setSelectedFrameId] = useState<number | null>(null);
@@ -26,7 +26,7 @@ function App() {
     void loadFrames(selectedSessionId);
   }, [selectedSessionId]);
 
-  async function loadSessions() {
+  async function loadSessions(preferredSessionId?: string) {
     setIsLoadingSessions(true);
     setError(null);
 
@@ -38,8 +38,16 @@ function App() {
       }
 
       const payload = (await response.json()) as SessionsResponse;
-      setSessionIds(payload.sessionIds);
-      setSelectedSessionId((currentSessionId) => currentSessionId ?? payload.sessionIds[0] ?? null);
+      setSessions(payload.sessions);
+      setSelectedSessionId((currentSessionId) => {
+        const nextSessionId = preferredSessionId ?? currentSessionId;
+
+        if (nextSessionId && payload.sessionIds.includes(nextSessionId)) {
+          return nextSessionId;
+        }
+
+        return payload.sessionIds[0] ?? null;
+      });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
     } finally {
@@ -106,13 +114,10 @@ function App() {
         frames: Frame[];
       };
 
-      setSessionIds((currentSessionIds) => [
-        payload.forkSessionId,
-        ...currentSessionIds.filter((sessionId) => sessionId !== payload.forkSessionId),
-      ]);
       setSelectedSessionId(payload.forkSessionId);
       setFrames(payload.frames);
       setSelectedFrameId(null);
+      await loadSessions(payload.forkSessionId);
     } catch (forkError) {
       setError(forkError instanceof Error ? forkError.message : String(forkError));
     }
@@ -152,7 +157,7 @@ function App() {
 
         <div className="grid flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           <SessionSidebar
-            sessionIds={sessionIds}
+            sessions={sessions}
             selectedSessionId={selectedSessionId}
             isLoading={isLoadingSessions}
             onRefresh={() => void loadSessions()}

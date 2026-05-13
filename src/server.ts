@@ -14,8 +14,11 @@ export function createServer() {
     const db = openFrameStore();
 
     try {
+      const sessions = db.listSessions();
+
       response.json({
-        sessionIds: db.listSessionIds(),
+        sessionIds: sessions.map((session) => session.sessionId),
+        sessions,
       });
     } finally {
       db.close();

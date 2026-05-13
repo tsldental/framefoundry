@@ -41,6 +41,8 @@ Recorded sessions can be replayed using the saved tool registry instead of makin
 
 ### Forking
 
+framefoundry turns branching into **Non-Linear Debugging**: developers can **rewind and refactor** agent reasoning by forking from any historical frame.
+
 Any selected frame can become a branch point. A fork clones the historical state up to the selected frame, tags the new branch with `branch_root_frame_id`, and then continues from there with a new prompt.
 
 ### Local visualizer
@@ -48,6 +50,7 @@ Any selected frame can become a branch point. A fork clones the historical state
 The included React dashboard provides:
 
 - session navigation
+- nested branch navigation for forked sessions
 - frame timeline inspection
 - tool call / tool result grouping
 - raw JSON inspection

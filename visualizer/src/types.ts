@@ -21,8 +21,16 @@ export interface Frame {
   createdAt: string;
 }
 
+export interface SessionSummary {
+  sessionId: string;
+  parentSessionId: string | null;
+  branchRootFrameId: number | null;
+  createdAt: string;
+}
+
 export interface SessionsResponse {
   sessionIds: string[];
+  sessions: SessionSummary[];
 }
 
 export interface SessionFramesResponse {
