@@ -6,6 +6,7 @@ import { NotesApp } from "./components/NotesApp";
 import { ResumeModal } from "./components/ResumeModal";
 import { SessionSidebar } from "./components/SessionSidebar";
 import type {
+  CopilotHandoffResult,
   Frame,
   ProjectContext,
   ResumeResult,
@@ -23,6 +24,7 @@ interface StatusNotice {
   resumeCommand?: string;
   restoredBranch?: string;
   backupRef?: string;
+  handoff?: CopilotHandoffResult;
 }
 
 function App() {
@@ -150,7 +152,7 @@ function App() {
     }
   }
 
-  async function handleForkConfirm(newPrompt: string) {
+  async function handleForkConfirm(newPrompt: string, options: { launchHandoff: boolean }) {
     if (!selectedSessionId || !forkFrame) return;
     setForkFrame(null);
     setError(null);
@@ -165,6 +167,7 @@ function App() {
         body: JSON.stringify({
           frameId: forkFrame.id,
           newPrompt,
+          launchHandoff: options.launchHandoff,
         }),
       });
 
@@ -178,19 +181,20 @@ function App() {
         frames: Frame[];
         workspaceRestore?: WorkspaceRestoreResult;
         resumeCommand?: string;
+        handoff?: CopilotHandoffResult;
       };
 
       setSelectedSessionId(payload.forkSessionId);
       setFrames(payload.frames);
       setSelectedFrameId(null);
-      setStatusNotice(formatForkStatusNotice(payload.workspaceRestore, payload.resumeCommand));
+      setStatusNotice(formatForkStatusNotice(payload.workspaceRestore, payload.resumeCommand, payload.handoff));
       await loadSessions(payload.forkSessionId);
     } catch (forkError) {
       setError(forkError instanceof Error ? forkError.message : String(forkError));
     }
   }
 
-  async function handleResumeConfirm(newPrompt: string) {
+  async function handleResumeConfirm(newPrompt: string, options: { launchHandoff: boolean }) {
     if (!selectedSessionId) {
       return;
     }
@@ -207,6 +211,7 @@ function App() {
         },
         body: JSON.stringify({
           newPrompt,
+          launchHandoff: options.launchHandoff,
         }),
       });
 
@@ -220,8 +225,9 @@ function App() {
       setFrames(payload.frames);
       setSelectedFrameId(null);
       setStatusNotice({
-        message: `Resumed into session ${payload.resumedSessionId.slice(-12)}.`,
+        message: formatResumeStatusMessage(payload.resumedSessionId, payload.handoff),
         resumeCommand: payload.resumeCommand,
+        handoff: payload.handoff,
       });
       await loadSessions(payload.resumedSessionId);
     } catch (resumeError) {
@@ -236,10 +242,10 @@ function App() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium uppercase tracking-[0.3em] text-cyan-400">
-                dAVM Visualizer
+                Copilot Safety Net
               </p>
               <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">
-                {activeTab === "sessions" ? "Cognitive Snapshot Explorer" : "Notes"}
+                {activeTab === "sessions" ? "Keep the good path, undo the bad one" : "Notes"}
               </h1>
               {project ? (
                 <div
@@ -289,8 +295,8 @@ function App() {
           </div>
           <p className="max-w-3xl text-sm leading-6 text-slate-300">
             {activeTab === "sessions"
-              ? "Inspect recorded sessions, compare live and replay frames, and browse the SQLite-backed timeline that powers dAVM."
-              : "Create and manage notes stored in the dAVM SQLite database."}
+              ? "FrameFoundry turns Copilot work into something you can safely revisit: save checkpoints, branch from the last good moment, and resume without losing momentum."
+              : "Keep supporting notes next to your saved paths and recovery points."}
           </p>
         </header>
 
@@ -326,10 +332,19 @@ function App() {
                     className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/20"
                   />
                 ) : null}
+                {statusNotice.handoff?.prompt ? (
+                  <CopyButton
+                    value={statusNotice.handoff.prompt}
+                    label="Copy Copilot prompt"
+                    className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                  />
+                ) : null}
               </div>
             </div>
           </div>
         ) : null}
+
+        {activeTab === "sessions" ? <SafetyNetPanel /> : null}
 
         <div className="grid flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           {activeTab === "notes" ? (
@@ -366,7 +381,7 @@ function App() {
         <ForkModal
           sessionId={selectedSessionId ?? ""}
           frame={forkFrame}
-          onConfirm={(prompt) => void handleForkConfirm(prompt)}
+          onConfirm={(prompt, options) => void handleForkConfirm(prompt, options)}
           onCancel={() => setForkFrame(null)}
         />
       ) : null}
@@ -374,7 +389,7 @@ function App() {
       {isResumeModalOpen && selectedSession ? (
         <ResumeModal
           sessionHeadline={selectedSession.headline}
-          onConfirm={(prompt) => void handleResumeConfirm(prompt)}
+          onConfirm={(prompt, options) => void handleResumeConfirm(prompt, options)}
           onCancel={() => setIsResumeModalOpen(false)}
         />
       ) : null}
@@ -383,6 +398,58 @@ function App() {
 }
 
 export default App;
+
+function SafetyNetPanel() {
+  return (
+    <section className="mb-6 grid gap-4 rounded-3xl border border-slate-800 bg-slate-900/60 p-5 shadow-xl shadow-slate-950/20 lg:grid-cols-3">
+      <SafetyNetCard
+        title="1. Record your work"
+        body="Start a Copilot run through FrameFoundry and it quietly keeps the path, checkpoints, and branch history for you."
+        accent="cyan"
+      />
+      <SafetyNetCard
+        title="2. Branch from the last good moment"
+        body="If the agent drifts, pick the frame where things still looked right and branch safely from there."
+        accent="emerald"
+      />
+      <SafetyNetCard
+        title="3. Recover and keep going"
+        body="Restore the matching workspace state, copy the resume command, and continue as if you had stayed on the better path all along."
+        accent="violet"
+      />
+    </section>
+  );
+}
+
+function SafetyNetCard({
+  title,
+  body,
+  accent,
+}: {
+  title: string;
+  body: string;
+  accent: "cyan" | "emerald" | "violet";
+}) {
+  const accentClass =
+    accent === "cyan"
+      ? "border-cyan-400/20 bg-cyan-400/5"
+      : accent === "emerald"
+        ? "border-emerald-400/20 bg-emerald-400/5"
+        : "border-violet-400/20 bg-violet-400/5";
+  const titleClass =
+    accent === "cyan"
+      ? "text-cyan-200"
+      : accent === "emerald"
+        ? "text-emerald-200"
+        : "text-violet-200";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${accentClass}`}>
+      <div className={`text-sm font-semibold ${titleClass}`}>{title}</div>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{body}</p>
+    </div>
+  );
+}
 
 function normalizeProjectContext(project: ProjectContext | undefined): ProjectContext | null {
   if (!project) {
@@ -403,6 +470,15 @@ function normalizeProjectContext(project: ProjectContext | undefined): ProjectCo
       typeof project.retentionPolicy.snapshotsPerSession === "number" &&
       typeof project.retentionPolicy.backupsPerSession === "number"
         ? project.retentionPolicy
+        : undefined,
+    handoff:
+      project.handoff &&
+      (project.handoff.provider === "manual" || project.handoff.provider === "github-copilot-vscode")
+        ? {
+            provider: project.handoff.provider,
+            editorCommand:
+              typeof project.handoff.editorCommand === "string" ? project.handoff.editorCommand : null,
+          }
         : undefined,
   };
 }
@@ -459,32 +535,85 @@ function normalizeSessionSummary(session: SessionSummary): SessionSummary {
 function formatForkStatusNotice(
   workspaceRestore: WorkspaceRestoreResult | undefined,
   resumeCommand?: string,
+  handoff?: CopilotHandoffResult,
 ): StatusNotice | null {
   if (!workspaceRestore) {
     return {
-      message: "Fork created.",
+      message: formatForkStatusMessage("Fork created.", handoff),
       resumeCommand,
+      handoff,
     };
   }
 
   if (workspaceRestore.applied && workspaceRestore.restoredBranch && workspaceRestore.snapshotCommit) {
     return {
-      message: `Fork created on branch ${workspaceRestore.restoredBranch} from Git snapshot ${workspaceRestore.snapshotCommit.slice(0, 12)}.`,
+      message: formatForkStatusMessage(
+        `Fork created on branch ${workspaceRestore.restoredBranch} from Git snapshot ${workspaceRestore.snapshotCommit.slice(0, 12)}.`,
+        handoff,
+      ),
       resumeCommand,
       restoredBranch: workspaceRestore.restoredBranch,
       backupRef: workspaceRestore.backupRef ?? undefined,
+      handoff,
     };
   }
 
   if (workspaceRestore.reason) {
     return {
-      message: `Fork created without restoring files from Git: ${workspaceRestore.reason}`,
+      message: formatForkStatusMessage(
+        `Fork created without restoring files from Git: ${workspaceRestore.reason}`,
+        handoff,
+      ),
       resumeCommand,
+      handoff,
     };
   }
 
   return {
-    message: "Fork created.",
+    message: formatForkStatusMessage("Fork created.", handoff),
     resumeCommand,
+    handoff,
   };
+}
+
+function formatForkStatusMessage(baseMessage: string, handoff?: CopilotHandoffResult): string {
+  if (!handoff) {
+    return baseMessage;
+  }
+
+  if (handoff.launched) {
+    return `${baseMessage} Opened ${handoff.providerLabel} and copied the continuation prompt.`;
+  }
+
+  if (handoff.copiedPrompt) {
+    return `${baseMessage} Copied a continuation prompt for ${handoff.providerLabel}.`;
+  }
+
+  if (handoff.launchRequested && handoff.reason) {
+    return `${baseMessage} ${handoff.reason}`;
+  }
+
+  return baseMessage;
+}
+
+function formatResumeStatusMessage(resumedSessionId: string, handoff?: CopilotHandoffResult): string {
+  const baseMessage = `Resumed into session ${resumedSessionId.slice(-12)}.`;
+
+  if (!handoff) {
+    return baseMessage;
+  }
+
+  if (handoff.launched) {
+    return `${baseMessage} Opened ${handoff.providerLabel} and copied the continuation prompt.`;
+  }
+
+  if (handoff.copiedPrompt) {
+    return `${baseMessage} Copied a continuation prompt for ${handoff.providerLabel}.`;
+  }
+
+  if (handoff.launchRequested && handoff.reason) {
+    return `${baseMessage} ${handoff.reason}`;
+  }
+
+  return baseMessage;
 }

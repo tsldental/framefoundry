@@ -218,6 +218,7 @@ export interface DavmRuntimeOptions {
   configPath?: string | null;
   snapshotMode?: "prompt" | "assistant" | "off";
   retention?: Partial<FramefoundryRetentionPolicy>;
+  handoff?: Partial<FramefoundryHandoffConfig>;
 }
 
 export interface FramefoundryRetentionPolicy {
@@ -228,6 +229,12 @@ export interface FramefoundryRetentionPolicy {
 export interface FramefoundryProjectConfig {
   snapshotMode?: "prompt" | "assistant" | "off";
   retention?: Partial<FramefoundryRetentionPolicy>;
+  handoff?: Partial<FramefoundryHandoffConfig>;
+}
+
+export interface FramefoundryHandoffConfig {
+  provider: "github-copilot-vscode" | "manual";
+  editorCommand: string | null;
 }
 
 export interface DavmResolvedPaths {
@@ -237,6 +244,7 @@ export interface DavmResolvedPaths {
   configPath: string | null;
   snapshotMode: NonNullable<DavmRuntimeOptions["snapshotMode"]>;
   retentionPolicy: FramefoundryRetentionPolicy;
+  handoff: FramefoundryHandoffConfig;
 }
 
 export interface FrameStoreOptions extends DavmRuntimeOptions {}
@@ -244,6 +252,11 @@ export interface FrameStoreOptions extends DavmRuntimeOptions {}
 const DEFAULT_RETENTION_POLICY: FramefoundryRetentionPolicy = {
   snapshotsPerSession: 25,
   backupsPerSession: 10,
+};
+
+const DEFAULT_HANDOFF_CONFIG: FramefoundryHandoffConfig = {
+  provider: "github-copilot-vscode",
+  editorCommand: null,
 };
 
 const DEFAULT_CONFIG_FILENAMES = ["framefoundry.config.json", ".framefoundry.json"] as const;
@@ -687,6 +700,7 @@ export function resolveDavmPaths(options: DavmRuntimeOptions = {}): DavmResolved
   const schemaPath = resolveSchemaPath(options.schemaPath, projectPath);
   const snapshotMode = resolveSnapshotMode(options.snapshotMode, config.snapshotMode);
   const retentionPolicy = resolveRetentionPolicy(options.retention, config.retention);
+  const handoff = resolveHandoffConfig(options.handoff, config.handoff);
 
   return {
     projectPath,
@@ -695,6 +709,7 @@ export function resolveDavmPaths(options: DavmRuntimeOptions = {}): DavmResolved
     configPath,
     snapshotMode,
     retentionPolicy,
+    handoff,
   };
 }
 
@@ -770,9 +785,17 @@ function normalizeProjectConfig(
     config.retention && typeof config.retention === "object" && !Array.isArray(config.retention)
       ? (config.retention as Record<string, unknown>)
       : undefined;
+  const handoffInput =
+    config.handoff && typeof config.handoff === "object" && !Array.isArray(config.handoff)
+      ? (config.handoff as Record<string, unknown>)
+      : undefined;
 
   if (config.retention !== undefined && !retentionInput) {
     throw new Error(`Invalid retention config in ${configPath}. Expected a JSON object.`);
+  }
+
+  if (config.handoff !== undefined && !handoffInput) {
+    throw new Error(`Invalid handoff config in ${configPath}. Expected a JSON object.`);
   }
 
   return {
@@ -787,6 +810,14 @@ function normalizeProjectConfig(
             retentionInput.backupsPerSession,
             `retention.backupsPerSession in ${configPath}`,
           ),
+        }
+      : undefined,
+    handoff: handoffInput
+      ? {
+          provider: handoffInput.provider
+            ? parseHandoffProvider(handoffInput.provider, `handoff.provider in ${configPath}`)
+            : undefined,
+          editorCommand: parseEditorCommand(handoffInput.editorCommand, `handoff.editorCommand in ${configPath}`),
         }
       : undefined,
   };
@@ -815,6 +846,22 @@ function resolveRetentionPolicy(
   };
 }
 
+function resolveHandoffConfig(
+  explicitHandoff: DavmRuntimeOptions["handoff"],
+  configuredHandoff: FramefoundryProjectConfig["handoff"],
+): FramefoundryHandoffConfig {
+  return {
+    provider:
+      explicitHandoff?.provider ??
+      configuredHandoff?.provider ??
+      DEFAULT_HANDOFF_CONFIG.provider,
+    editorCommand:
+      explicitHandoff?.editorCommand ??
+      configuredHandoff?.editorCommand ??
+      DEFAULT_HANDOFF_CONFIG.editorCommand,
+  };
+}
+
 function parseSnapshotMode(
   value: unknown,
   label: string,
@@ -824,6 +871,26 @@ function parseSnapshotMode(
   }
 
   throw new Error(`Invalid ${label}. Expected "prompt", "assistant", or "off".`);
+}
+
+function parseHandoffProvider(value: unknown, label: string): FramefoundryHandoffConfig["provider"] {
+  if (value === "github-copilot-vscode" || value === "manual") {
+    return value;
+  }
+
+  throw new Error(`Invalid ${label}. Expected "github-copilot-vscode" or "manual".`);
+}
+
+function parseEditorCommand(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Invalid ${label}. Expected a non-empty string.`);
+  }
+
+  return value.trim();
 }
 
 function parseRetentionCount(value: unknown, label: string): number | undefined {

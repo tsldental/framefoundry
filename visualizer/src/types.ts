@@ -43,6 +43,10 @@ export interface ProjectContext {
     snapshotsPerSession: number;
     backupsPerSession: number;
   };
+  handoff?: {
+    provider: "github-copilot-vscode" | "manual";
+    editorCommand: string | null;
+  };
 }
 
 export interface SessionsResponse {
@@ -91,6 +95,25 @@ export interface ResumeResult {
   resumeCommand: string;
   frames: Frame[];
   registryEntries: unknown[];
+  handoff?: CopilotHandoffResult;
+}
+
+export interface CopilotHandoffResult {
+  providerId: "github-copilot-vscode" | "manual";
+  providerLabel: string;
+  workspacePath: string;
+  sessionId: string;
+  source: "fork" | "resume";
+  prompt: string;
+  branchName: string | null;
+  editorCommand: string | null;
+  launchCommand: string | null;
+  canLaunch: boolean;
+  reason: string | null;
+  instructions: string[];
+  launchRequested: boolean;
+  launched: boolean;
+  copiedPrompt: boolean;
 }
 
 export interface SessionCompareResult {

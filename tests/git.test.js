@@ -14,6 +14,7 @@ const {
   restoreGitSnapshotForFork,
 } = require("../dist/git.js");
 
+const { buildCopilotHandoff } = require("../dist/handoff.js");
 const { resolveDavmPaths: resolveRuntimePaths } = require("../dist/db.js");
 
 function createTempRepo() {
@@ -132,6 +133,40 @@ test("project config drives snapshot mode and automatic retention", () => {
 
     const backupRefs = listFramefoundryRefs(paths, { kind: "backup", sessionId: "session-a" });
     assert.equal(backupRefs.refs.length, 1);
+  } finally {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+  }
+});
+
+test("project config can force manual handoff mode", () => {
+  const repoDir = createTempRepo();
+
+  try {
+    fs.writeFileSync(
+      path.join(repoDir, "framefoundry.config.json"),
+      JSON.stringify(
+        {
+          handoff: {
+            provider: "manual",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const paths = resolveRuntimePaths({ projectPath: repoDir });
+    const handoff = buildCopilotHandoff(paths, {
+      sessionId: "session-a",
+      source: "fork",
+      prompt: "Keep building from this branch.",
+      branchName: "framefoundry/fork-session-a-frame-2",
+    });
+
+    assert.equal(paths.handoff.provider, "manual");
+    assert.equal(handoff.providerId, "manual");
+    assert.equal(handoff.canLaunch, false);
+    assert.match(handoff.prompt, /Keep building from this branch/);
   } finally {
     fs.rmSync(repoDir, { recursive: true, force: true });
   }

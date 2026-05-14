@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 
 interface ResumeModalProps {
   sessionHeadline: string;
-  onConfirm: (prompt: string) => void;
+  onConfirm: (prompt: string, options: { launchHandoff: boolean }) => void;
   onCancel: () => void;
 }
 
 export function ResumeModal({ sessionHeadline, onConfirm, onCancel }: ResumeModalProps) {
   const [prompt, setPrompt] = useState("Continue from the current session state.");
+  const [launchHandoff, setLaunchHandoff] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -18,7 +19,7 @@ export function ResumeModal({ sessionHeadline, onConfirm, onCancel }: ResumeModa
     const trimmed = prompt.trim();
 
     if (trimmed) {
-      onConfirm(trimmed);
+      onConfirm(trimmed, { launchHandoff });
     }
   }
 
@@ -50,6 +51,21 @@ export function ResumeModal({ sessionHeadline, onConfirm, onCancel }: ResumeModa
           className="mt-3 w-full resize-none rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-500/60 focus:outline-none focus:ring-1 focus:ring-cyan-500/30"
           autoFocus
         />
+
+        <label className="mt-3 flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={launchHandoff}
+            onChange={(event) => setLaunchHandoff(event.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-400 focus:ring-cyan-500/40"
+          />
+          <span>
+            <span className="font-medium text-slate-100">Open GitHub Copilot in VS Code after resume</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-500">
+              FrameFoundry will open the restored workspace in a new VS Code window and copy a continuation prompt for Copilot Chat.
+            </span>
+          </span>
+        </label>
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">This creates a new session branch from the latest recorded frame.</p>

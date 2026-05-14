@@ -1,13 +1,13 @@
 # framefoundry
 
-**framefoundry** is a local-first **Deterministic Agent Virtual Machine (dAVM)** for recording, replaying, branching, and visualizing AI agent execution.
+**framefoundry** is a local-first safety net for Copilot-driven development.
 
-It captures every meaningful step of an agent session as a persistent SQLite timeline so you can:
+It records your agent-assisted work as a path you can return to, so you can:
 
-- **record** agent turns and tool calls
-- **replay** sessions deterministically from recorded tool outputs
-- **fork** execution from an earlier frame and continue in a new direction
-- **inspect** the full cognitive timeline in a local visualizer
+- **save** checkpoints while you work
+- **branch** from the last good moment when the agent drifts
+- **recover** matching file state in Git-backed projects
+- **resume** on a better path instead of starting over
 
 <p align="center">
   <img src="docs/images/framefoundry-architecture.svg" alt="framefoundry architecture overview" width="900">
@@ -15,16 +15,16 @@ It captures every meaningful step of an agent session as a persistent SQLite tim
 
 ## Why framefoundry exists
 
-Modern agent workflows are powerful, but they are hard to debug. Once a tool call has executed or a model response has streamed back, the exact execution path is often gone.
+Modern Copilot workflows are powerful, but they are easy to lose control of. Once a tool call has executed or a model response has streamed back, the exact path that got you to a good result can disappear behind more prompts and edits.
 
-framefoundry treats agent execution like a navigable runtime:
+framefoundry turns that path into something you can keep:
 
 - each LLM turn becomes a **Frame**
 - each tool invocation becomes a **Frame**
 - each tool result is stored for deterministic reuse
 - each branch preserves its origin through **`branch_root_frame_id`**
 
-The result is an environment where agent behavior can be replayed, inspected, and evolved instead of merely observed once.
+The result is a workflow where experimenting with Copilot feels safer: you can keep moving quickly without worrying that one bad turn wipes out the good one.
 
 ## Core capabilities
 
@@ -45,9 +45,9 @@ Recorded sessions can be replayed using the saved tool registry instead of makin
 
 ### Forking
 
-framefoundry turns branching into **Non-Linear Debugging**: developers can **rewind and refactor** agent reasoning by forking from any historical frame.
+framefoundry turns branching into an everyday recovery move: rewind to the last good moment, branch safely, and keep going.
 
-Any selected frame can become a branch point. A fork clones the historical state up to the selected frame, tags the new branch with `branch_root_frame_id`, restores the latest recorded Git snapshot at or before that frame into a new branch, and then continues from there with a new prompt.
+Any selected frame can become a branch point. A fork clones the history up to the selected frame, tags the new branch with `branch_root_frame_id`, restores the latest recorded Git snapshot at or before that frame into a new branch, and then continues from there with a new prompt.
 
 <p align="center">
   <img src="docs/images/non-linear-debugging.svg" alt="Branching and forking from a historical frame in framefoundry" width="900">
@@ -64,7 +64,7 @@ The included React dashboard provides:
 - tool call / tool result grouping
 - raw JSON inspection
 - frame selection and forking from the UI
-- copy actions for planned branches, backup refs, and resume commands
+- copy actions for planned branches, backup refs, resume commands, and Copilot continuation prompts
 
 <p align="center">
   <img src="docs/images/visualizer-snapshots.svg" alt="framefoundry visualizer showing session tree and cognitive snapshots" width="900">
@@ -159,6 +159,9 @@ You can keep persistent defaults with your tracked project by creating `framefou
   "retention": {
     "snapshotsPerSession": 25,
     "backupsPerSession": 10
+  },
+  "handoff": {
+    "provider": "github-copilot-vscode"
   }
 }
 ```
@@ -168,6 +171,8 @@ Supported keys:
 - `snapshotMode` — `prompt`, `assistant`, or `off`
 - `retention.snapshotsPerSession` — how many internal snapshot refs to keep per session
 - `retention.backupsPerSession` — how many internal backup refs to keep per session
+- `handoff.provider` — `github-copilot-vscode` or `manual`
+- `handoff.editorCommand` — optional editor launcher such as `code` or a full path to the VS Code executable
 
 CLI flags still override config values when you need a one-off run, and you can point to a different config file with `--config <path>`.
 
@@ -185,6 +190,16 @@ When you fork from the visualizer:
 4. it starts the forked Copilot continuation from that restored file state
 
 If the project is not in Git, or the selected frame predates recorded snapshots, framefoundry still creates the forked session but reports that workspace restore was unavailable.
+
+### GitHub Copilot handoff
+
+After you fork or resume from the visualizer, FrameFoundry can now:
+
+1. open the restored project in a **new VS Code window**
+2. copy a ready-to-paste **GitHub Copilot Chat continuation prompt**
+3. let you keep coding from that restored branch instead of re-explaining the context from scratch
+
+This is the first handoff provider in a pluggable system, so other editors can be added later.
 
 ### Real-project quickstart
 
@@ -257,6 +272,7 @@ At the moment you must:
 - File restore is only as granular as the Git checkpoints that were recorded for that session.
 - Snapshot and backup refs are internal Git refs, so you should use the provided cleanup commands rather than editing them manually.
 - Automatic retention only manages internal framefoundry refs; it does not touch your branches, tags, or normal Git history.
+- The VS Code handoff opens the workspace and copies the Copilot prompt, but it does not yet auto-open Copilot Chat with the prompt already pasted.
 
 The next natural improvement is a deeper Copilot integration that can attach to a live coding workflow with less manual launching.
 
@@ -344,10 +360,22 @@ node dist\index.js fork-preview <sessionId> <frameId> --project 'C:\path\to\your
 node dist\index.js fork <sessionId> <frameId> "Take this in a new direction." --project 'C:\path\to\your-project'
 ```
 
+To launch the GitHub Copilot handoff immediately after the fork:
+
+```powershell
+node dist\index.js fork <sessionId> <frameId> "Take this in a new direction." --project 'C:\path\to\your-project' --launch-handoff
+```
+
 ### Resume from an existing session
 
 ```powershell
 node dist\index.js resume <sessionId> "Continue from here." --project 'C:\path\to\your-project'
+```
+
+To launch the GitHub Copilot handoff immediately after resume:
+
+```powershell
+node dist\index.js resume <sessionId> "Continue from here." --project 'C:\path\to\your-project' --launch-handoff
 ```
 
 ### Manage internal Git refs

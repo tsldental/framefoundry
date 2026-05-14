@@ -5,6 +5,7 @@ import {
   type CopilotSession,
   type Tool,
 } from "@github/copilot-sdk";
+import { platform } from "node:os";
 import { createSearchDocsTool } from "./agent";
 import {
   openFrameStore,
@@ -1285,7 +1286,8 @@ function buildWorkspaceRestoreContext(workspaceRestore: GitWorkspaceRestoreResul
 }
 
 function buildResumeCommand(projectPath: string, sessionId: string): string {
-  return `node dist\\index.js resume --project ${quoteForPowerShell(projectPath)} ${sessionId} "Continue from this session."`;
+  const scriptPath = platform() === "win32" ? "dist\\index.js" : "dist/index.js";
+  return `node ${scriptPath} resume --project ${quoteForShell(projectPath)} ${quoteForShell(sessionId)} ${quoteForShell("Continue from this session.")}`;
 }
 
 function recordSnapshotForFrame(
@@ -1338,8 +1340,12 @@ function toJsonObject(value: object): JsonValue {
   return normalizedObject;
 }
 
-function quoteForPowerShell(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+function quoteForShell(value: string): string {
+  if (platform() === "win32") {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function asError(error: unknown): Error {

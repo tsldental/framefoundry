@@ -47,10 +47,10 @@ export function SessionSidebar({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
-            Sessions
+            Saved paths
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            {project ? `${project.name} workspace timeline` : "Recorded SQLite timelines"}
+            {project ? `${project.name} branch and recovery history` : "Your Copilot safety net history"}
           </p>
         </div>
         <button
@@ -83,12 +83,17 @@ export function SessionSidebar({
           className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3"
           title={`Project: ${project.projectPath}\nDatabase: ${project.dbPath}`}
         >
-          <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">Project</div>
+          <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">Protected Project</div>
           <div className="mt-1 truncate text-sm font-semibold text-white">{project.name}</div>
           <div className="mt-1 truncate text-[11px] text-slate-400">{project.projectPath}</div>
           {project.retentionPolicy ? (
             <div className="mt-2 text-[11px] text-slate-400">
-              Keep {project.retentionPolicy.snapshotsPerSession} snapshots / {project.retentionPolicy.backupsPerSession} backups per session
+              Keeping {project.retentionPolicy.snapshotsPerSession} checkpoints / {project.retentionPolicy.backupsPerSession} recovery backups per session
+            </div>
+          ) : null}
+          {project.handoff ? (
+            <div className="mt-1 text-[11px] text-slate-400">
+              Handoff: {project.handoff.provider === "github-copilot-vscode" ? "GitHub Copilot in VS Code" : "Manual"}
             </div>
           ) : null}
           {project.configPath ? (
@@ -98,10 +103,12 @@ export function SessionSidebar({
       ) : null}
 
       {isLoading ? (
-        <p className="text-sm text-slate-400">Loading sessions...</p>
+        <p className="text-sm text-slate-400">Loading saved paths...</p>
       ) : matchCount === 0 ? (
         <p className="text-sm text-slate-400">
-          {filter ? "No sessions match this filter." : "No sessions recorded yet."}
+          {filter
+            ? "No saved paths match this filter."
+            : "No saved paths yet. Start a recorded run and this becomes your recovery history."}
         </p>
       ) : (
         <div className="space-y-3 overflow-y-auto">

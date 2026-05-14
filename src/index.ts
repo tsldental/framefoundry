@@ -4,6 +4,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import { runAgentDemo } from "./agent";
 import { openFrameStore, resolveDavmPaths, type DavmRuntimeOptions, type JsonValue } from "./db";
+import { launchCopilotHandoff } from "./handoff";
 import {
   createManualGitSnapshot,
   listFramefoundryRefs,
@@ -54,14 +55,30 @@ program
   .option("--schema-path <path>", "Schema path")
   .option("--config <path>", "Path to a FrameFoundry project config file")
   .option("--snapshot-mode <mode>", "Snapshot cadence: prompt, assistant, or off")
+  .option("--launch-handoff", "Open the restored workspace in VS Code and copy a Copilot continuation prompt")
+  .option("--handoff-provider <provider>", "Handoff provider: github-copilot-vscode or manual")
+  .option("--editor-command <command>", "Editor command to use for handoff launch")
   .action(async (sessionId: string, frameId: string, prompt: string, commandOptions: CliOptions) => {
+    const runtimeOptions = toRuntimeOptions(commandOptions);
     const result = await runFork(
       sessionId,
       Number(frameId),
       prompt,
-      toRuntimeOptions(commandOptions),
+      runtimeOptions,
     );
-    printJson(result);
+    const paths = resolveDavmPaths(runtimeOptions);
+    printJson({
+      ...result,
+      handoff: launchCopilotHandoff(paths, {
+        sessionId: result.forkSessionId,
+        source: "fork",
+        prompt,
+        branchName: result.workspaceRestore.restoredBranch,
+        launch: commandOptions.launchHandoff ?? false,
+        providerId: commandOptions.handoffProvider,
+        editorCommand: commandOptions.editorCommand,
+      }),
+    });
   });
 
 program
@@ -86,9 +103,24 @@ program
   .option("--schema-path <path>", "Schema path")
   .option("--config <path>", "Path to a FrameFoundry project config file")
   .option("--snapshot-mode <mode>", "Snapshot cadence: prompt, assistant, or off")
+  .option("--launch-handoff", "Open the restored workspace in VS Code and copy a Copilot continuation prompt")
+  .option("--handoff-provider <provider>", "Handoff provider: github-copilot-vscode or manual")
+  .option("--editor-command <command>", "Editor command to use for handoff launch")
   .action(async (sessionId: string, prompt: string, commandOptions: CliOptions) => {
-    const result = await runResume(sessionId, prompt, toRuntimeOptions(commandOptions));
-    printJson(result);
+    const runtimeOptions = toRuntimeOptions(commandOptions);
+    const result = await runResume(sessionId, prompt, runtimeOptions);
+    const paths = resolveDavmPaths(runtimeOptions);
+    printJson({
+      ...result,
+      handoff: launchCopilotHandoff(paths, {
+        sessionId: result.resumedSessionId,
+        source: "resume",
+        prompt,
+        launch: commandOptions.launchHandoff ?? false,
+        providerId: commandOptions.handoffProvider,
+        editorCommand: commandOptions.editorCommand,
+      }),
+    });
   });
 
 program
@@ -247,6 +279,9 @@ interface CliOptions {
   schemaPath?: string;
   configPath?: string;
   snapshotMode?: "prompt" | "assistant" | "off";
+  launchHandoff?: boolean;
+  handoffProvider?: "github-copilot-vscode" | "manual";
+  editorCommand?: string;
 }
 
 function toRuntimeOptions(options: CliOptions): DavmRuntimeOptions {
@@ -263,6 +298,10 @@ function toRuntimeOptions(options: CliOptions): DavmRuntimeOptions {
     schemaPath: options.schemaPath,
     configPath: options.configPath,
     snapshotMode,
+    handoff: {
+      provider: options.handoffProvider,
+      editorCommand: options.editorCommand,
+    },
   };
 }
 

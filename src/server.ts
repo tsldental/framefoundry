@@ -2,6 +2,7 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { openFrameStore, resolveDavmPaths, type DavmRuntimeOptions } from "./db";
+import { launchCopilotHandoff } from "./handoff";
 import { listFramefoundryRefs, pruneFramefoundryRefs } from "./git";
 import { NoteStore } from "./notes";
 import { getForkPreview, runFork, runReplay, runResume } from "./replay";
@@ -32,6 +33,7 @@ export function createServer(options: ServerOptions = {}) {
             configPath: paths.configPath,
             snapshotMode: paths.snapshotMode,
             retentionPolicy: paths.retentionPolicy,
+            handoff: paths.handoff,
           },
         });
     } finally {
@@ -178,6 +180,15 @@ export function createServer(options: ServerOptions = {}) {
     const frameId = Number(request.body?.frameId);
     const newPrompt =
       typeof request.body?.newPrompt === "string" ? request.body.newPrompt.trim() : "";
+    const launchHandoff = request.body?.launchHandoff === true;
+    const handoffProvider =
+      request.body?.handoffProvider === "manual" || request.body?.handoffProvider === "github-copilot-vscode"
+        ? request.body.handoffProvider
+        : undefined;
+    const editorCommand =
+      typeof request.body?.editorCommand === "string" && request.body.editorCommand.trim()
+        ? request.body.editorCommand.trim()
+        : undefined;
 
     if (!Number.isInteger(frameId)) {
       response.status(400).json({ error: "frameId must be an integer" });
@@ -191,7 +202,18 @@ export function createServer(options: ServerOptions = {}) {
 
     try {
       const forkResult = await runFork(request.params.id, frameId, newPrompt, paths);
-      response.json(forkResult);
+      response.json({
+        ...forkResult,
+        handoff: launchCopilotHandoff(paths, {
+          sessionId: forkResult.forkSessionId,
+          source: "fork",
+          prompt: newPrompt,
+          branchName: forkResult.workspaceRestore.restoredBranch,
+          launch: launchHandoff,
+          providerId: handoffProvider,
+          editorCommand,
+        }),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       response.status(500).json({ error: message });
@@ -201,6 +223,15 @@ export function createServer(options: ServerOptions = {}) {
   app.post("/api/sessions/:id/resume", async (request, response) => {
     const newPrompt =
       typeof request.body?.newPrompt === "string" ? request.body.newPrompt.trim() : "";
+    const launchHandoff = request.body?.launchHandoff === true;
+    const handoffProvider =
+      request.body?.handoffProvider === "manual" || request.body?.handoffProvider === "github-copilot-vscode"
+        ? request.body.handoffProvider
+        : undefined;
+    const editorCommand =
+      typeof request.body?.editorCommand === "string" && request.body.editorCommand.trim()
+        ? request.body.editorCommand.trim()
+        : undefined;
 
     if (!newPrompt) {
       response.status(400).json({ error: "newPrompt is required" });
@@ -209,7 +240,17 @@ export function createServer(options: ServerOptions = {}) {
 
     try {
       const resumeResult = await runResume(request.params.id, newPrompt, options);
-      response.json(resumeResult);
+      response.json({
+        ...resumeResult,
+        handoff: launchCopilotHandoff(paths, {
+          sessionId: resumeResult.resumedSessionId,
+          source: "resume",
+          prompt: newPrompt,
+          launch: launchHandoff,
+          providerId: handoffProvider,
+          editorCommand,
+        }),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       response.status(500).json({ error: message });

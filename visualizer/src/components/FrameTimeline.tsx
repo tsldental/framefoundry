@@ -53,7 +53,7 @@ export function FrameTimeline({
     <main className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/30">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Active Session</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Current Path</p>
           <h2 className="mt-2 text-2xl font-semibold text-white">
             {session ? session.headline : sessionId ?? "Select a session"}
           </h2>
@@ -70,13 +70,13 @@ export function FrameTimeline({
               onClick={onResumeSession}
               className="rounded-full border border-violet-400/30 bg-violet-400/10 px-4 py-2 text-sm font-medium text-violet-100 transition hover:border-violet-300 hover:bg-violet-400/20"
             >
-              Resume session
+              Continue from latest
             </button>
           ) : null}
           <Metric label="Frames" value={frames.length} />
-          <Metric label="Live" value={liveFrames.length} />
-          <Metric label="Replay" value={replayFrames.length} />
-          <Metric label="Errors" value={timelineDiagnostics.errorCount} />
+          <Metric label="New work" value={liveFrames.length} />
+          <Metric label="Replayed" value={replayFrames.length} />
+          <Metric label="Warnings" value={timelineDiagnostics.errorCount} />
         </div>
       </div>
 
@@ -84,11 +84,11 @@ export function FrameTimeline({
       {session ? <CompareStrip compareResult={compareResult} /> : null}
 
       {!sessionId ? (
-        <EmptyState message="Choose a session to inspect its recorded timeline." />
+        <EmptyState message="Choose a saved path to see where Copilot went, where it stayed useful, and where you can safely branch." />
       ) : isLoading ? (
-        <EmptyState message="Loading cognitive snapshot..." />
+        <EmptyState message="Loading your saved path..." />
       ) : frames.length === 0 ? (
-        <EmptyState message="This session has no frames yet." />
+        <EmptyState message="This path does not have any saved frames yet." />
       ) : (
         <div className="space-y-4">
           {framePairs.map(({ frame, toolResult }) => (
@@ -110,7 +110,7 @@ export function FrameTimeline({
           <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-cyan-400/30 bg-slate-950/95 px-5 py-3 shadow-2xl shadow-cyan-950/20 backdrop-blur">
             <div>
               <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">
-                Selected Frame
+                Recovery Point
               </div>
               <div className="mt-1 text-sm text-white">
                 #{selectedFrame.sequence} {selectedFrame.frameType}
@@ -121,7 +121,7 @@ export function FrameTimeline({
               onClick={() => onForkFromFrame(selectedFrame)}
               className="rounded-full border border-cyan-400/40 bg-cyan-400/15 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-400/25"
             >
-              Fork from here
+              Branch from here
             </button>
           </div>
         </div>
@@ -133,17 +133,17 @@ export function FrameTimeline({
 function CompareStrip({ compareResult }: { compareResult: SessionCompareResult | null }) {
   if (!compareResult) {
     return (
-      <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/60 px-5 py-4 text-sm text-slate-400">
-        No source comparison is available for this session yet.
-      </section>
-    );
-  }
+        <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/60 px-5 py-4 text-sm text-slate-400">
+          No earlier source path is available to compare against yet.
+        </section>
+      );
+    }
 
   return (
     <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/60 px-5 py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.25em] text-violet-300">Compare View</div>
+          <div className="text-[11px] uppercase tracking-[0.25em] text-violet-300">What changed</div>
           <p className="mt-1 text-sm text-slate-300">{compareResult.comparisonSummary}</p>
         </div>
         {compareResult.compareTarget ? (
@@ -158,14 +158,14 @@ function CompareStrip({ compareResult }: { compareResult: SessionCompareResult |
       {compareResult.compareTarget ? (
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <CompareMetric
-            label="Compared to"
+            label="Source path"
             value={compareResult.compareTarget.headline}
             detail={compareResult.compareTarget.reason.replace("_", " ")}
           />
           <CompareMetric
-            label="Inherited"
+            label="Recovered"
             value={String(compareResult.inheritedFrameCount)}
-            detail={`${compareResult.newFrameCount} new`}
+            detail={`${compareResult.newFrameCount} new after branching`}
           />
           <CompareMetric
             label="Assistant turns"
@@ -195,13 +195,13 @@ function SnapshotStrip({ session }: { session: SessionSummary }) {
   return (
     <section className="mb-6 grid gap-3 xl:grid-cols-3">
       <SnapshotCard label="Opening Snapshot" value={session.headline} accent="cyan" />
-      <SnapshotCard label="Latest Checkpoint" value={session.latestSummary} accent="emerald" />
+      <SnapshotCard label="Latest Safe Point" value={session.latestSummary} accent="emerald" />
       <SnapshotCard
-        label="Branch Context"
+        label="Recovery Context"
         value={
           session.branchRootFrameId
-            ? `Forked from frame #${session.branchRootFrameId} with ${session.frameCount} recorded frames across this path.`
-            : `Root session with ${session.frameCount} recorded frames and ${session.childCount} downstream branch${session.childCount === 1 ? "" : "es"}.`
+            ? `Branched from frame #${session.branchRootFrameId} with ${session.frameCount} saved frames on this path.`
+            : `Original path with ${session.frameCount} saved frames and ${session.childCount} downstream branch${session.childCount === 1 ? "" : "es"}.`
         }
         accent="violet"
       />
