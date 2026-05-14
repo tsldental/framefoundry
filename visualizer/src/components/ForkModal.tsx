@@ -1,19 +1,51 @@
 import { useEffect, useRef, useState } from "react";
-import type { Frame } from "../types";
+import { CopyButton } from "./CopyButton";
+import type { ForkPreviewResult, Frame } from "../types";
 
 interface ForkModalProps {
+  sessionId: string;
   frame: Frame;
   onConfirm: (prompt: string) => void;
   onCancel: () => void;
 }
 
-export function ForkModal({ frame, onConfirm, onCancel }: ForkModalProps) {
+export function ForkModal({ sessionId, frame, onConfirm, onCancel }: ForkModalProps) {
   const [prompt, setPrompt] = useState("Take this in a new direction.");
+  const [preview, setPreview] = useState<ForkPreviewResult | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     textareaRef.current?.select();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetch(`/api/sessions/${encodeURIComponent(sessionId)}/fork-preview?frameId=${frame.id}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = (await response.json()) as { error?: string };
+          throw new Error(payload.error ?? `Failed to preview fork from frame ${frame.id}`);
+        }
+
+        return (await response.json()) as ForkPreviewResult;
+      })
+      .then((payload) => {
+        if (!cancelled) {
+          setPreview(payload);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPreviewError(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [frame.id, sessionId]);
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
@@ -46,8 +78,9 @@ export function ForkModal({ frame, onConfirm, onCancel }: ForkModalProps) {
             Continue from Frame #{frame.sequence}
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-400">
-            Start a new branch from this snapshot with a fresh prompt. The forked session inherits
-            all context up to this frame.
+            Start a new branch from this snapshot with a fresh prompt. FrameFoundry restores the
+            latest recorded Git checkpoint at or before this frame, then continues with the full
+            recorded context up to this point.
           </p>
         </div>
 
@@ -58,6 +91,57 @@ export function ForkModal({ frame, onConfirm, onCancel }: ForkModalProps) {
               {frame.toolName}
             </span>
           ) : null}
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">
+          <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">Restore Preview</div>
+          {previewError ? (
+            <p className="mt-2 text-rose-300">{previewError}</p>
+          ) : preview ? (
+            <div className="mt-2 space-y-1 text-xs leading-5 text-slate-300">
+              <p>
+                <span className="text-slate-500">Branch:</span>{" "}
+                <span className="font-mono">{preview.restorePlan.plannedBranch ?? "Unavailable"}</span>
+                {preview.restorePlan.plannedBranch ? (
+                  <CopyButton
+                    value={preview.restorePlan.plannedBranch}
+                    label="Copy"
+                    className="ml-2 rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+                  />
+                ) : null}
+              </p>
+              <p>
+                <span className="text-slate-500">Snapshot:</span>{" "}
+                <span className="font-mono">
+                  {preview.restorePlan.snapshotCommit
+                    ? preview.restorePlan.snapshotCommit.slice(0, 12)
+                    : "No recorded snapshot"}
+                </span>
+              </p>
+              <p>
+                <span className="text-slate-500">Snapshot frame:</span>{" "}
+                {preview.latestSnapshotFrameId ?? "None"}
+              </p>
+              <p>
+                <span className="text-slate-500">Backup refs:</span>{" "}
+                <span className="font-mono">{preview.restorePlan.backupRefPrefix ?? "Unavailable"}</span>
+                {preview.restorePlan.backupRefPrefix ? (
+                  <CopyButton
+                    value={preview.restorePlan.backupRefPrefix}
+                    label="Copy"
+                    className="ml-2 rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-300 transition hover:border-slate-600 hover:text-white"
+                  />
+                ) : null}
+              </p>
+              {preview.restorePlan.reason ? (
+                <p className="text-amber-300">{preview.restorePlan.reason}</p>
+              ) : (
+                <p className="text-emerald-300">Workspace files will be restored before the fork continues.</p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-slate-500">Loading preview…</p>
+          )}
         </div>
 
         <textarea

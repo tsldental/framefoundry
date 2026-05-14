@@ -7,6 +7,7 @@ import {
   type ToolRegistryEntry,
   type Frame,
 } from "./db";
+import { captureGitSnapshot } from "./git";
 
 const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -24,6 +25,7 @@ interface PendingToolCall {
 
 interface SessionRecordingState {
   lastUserFrameId: number | null;
+  lastAssistantFrameId: number | null;
   pendingToolCalls: PendingToolCall[];
 }
 
@@ -164,7 +166,7 @@ export async function runAgentDemo(
         }
 
         const state = getSessionRecordingState(sessionStateById, activeSessionId);
-        db.recordAgentTurn({
+        const frame = db.recordAgentTurn({
           sessionId: activeSessionId,
           role: "assistant",
           content: event.data.content,
@@ -173,6 +175,17 @@ export async function runAgentDemo(
             eventType: event.type,
           },
         });
+
+        state.lastAssistantFrameId = frame.id;
+        recordSnapshotForFrame(
+          db,
+          paths,
+          activeSessionId,
+          paths.snapshotMode,
+          "assistant",
+          frame.id,
+          "assistant message",
+        );
       },
     });
 
@@ -182,6 +195,16 @@ export async function runAgentDemo(
       SESSION_IDLE_TIMEOUT_MS,
     );
     const assistantResponse = assistantMessage?.data.content ?? null;
+    const sessionState = getSessionRecordingState(sessionStateById, session.sessionId);
+    recordSnapshotForFrame(
+      db,
+      paths,
+      session.sessionId,
+      paths.snapshotMode,
+      "prompt",
+      sessionState.lastAssistantFrameId ?? sessionState.lastUserFrameId,
+      "recorded prompt",
+    );
 
     return {
       sessionId: session.sessionId,
@@ -229,6 +252,7 @@ function getSessionRecordingState(
 
   const nextState: SessionRecordingState = {
     lastUserFrameId: null,
+    lastAssistantFrameId: null,
     pendingToolCalls: [],
   };
 
@@ -301,4 +325,54 @@ function asError(error: unknown): Error {
   }
 
   return new Error(String(error));
+}
+
+function recordSnapshotForFrame(
+  db: ReturnType<typeof openFrameStore>,
+  paths: ReturnType<typeof resolveDavmPaths>,
+  sessionId: string,
+  snapshotMode: NonNullable<DavmRuntimeOptions["snapshotMode"]>,
+  trigger: "prompt" | "assistant",
+  frameId: number | null,
+  label: string,
+): void {
+  if (!frameId || snapshotMode === "off" || (snapshotMode === "prompt" && trigger !== "prompt")) {
+    return;
+  }
+
+  const frame = db.getFrame(frameId);
+
+  if (!frame) {
+    return;
+  }
+
+  const snapshotResult = captureGitSnapshot(paths, sessionId, frame.id, label);
+
+  if (snapshotResult.available && snapshotResult.metadata) {
+    db.updateFrameMetadata(frame.id, mergeJsonObjects(frame.metadata, {
+      git_snapshot: toJsonObject(snapshotResult.metadata),
+    }));
+  }
+}
+
+function mergeJsonObjects(left: JsonValue, right: JsonValue): JsonValue {
+  const normalizedLeft =
+    typeof left === "object" && left !== null && !Array.isArray(left) ? left : {};
+  const normalizedRight =
+    typeof right === "object" && right !== null && !Array.isArray(right) ? right : {};
+
+  return {
+    ...normalizedLeft,
+    ...normalizedRight,
+  };
+}
+
+function toJsonObject(value: object): JsonValue {
+  const normalizedObject: Record<string, JsonValue> = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    normalizedObject[key] = toJsonValue(entry);
+  }
+
+  return normalizedObject;
 }

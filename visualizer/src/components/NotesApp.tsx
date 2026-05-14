@@ -15,19 +15,31 @@ export function NotesApp() {
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    void loadNotes();
-  }, []);
+    let cancelled = false;
 
-  async function loadNotes() {
-    try {
-      const res = await fetch("/api/notes");
-      if (!res.ok) throw new Error(`Failed to load notes: ${res.status}`);
-      const payload = (await res.json()) as { notes: Note[] };
-      setNotes(payload.notes);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
+    void fetch("/api/notes")
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load notes: ${res.status}`);
+        }
+
+        return (await res.json()) as { notes: Note[] };
+      })
+      .then((payload) => {
+        if (!cancelled) {
+          setNotes(payload.notes);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function selectNote(note: Note) {
     setSelectedId(note.id);

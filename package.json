@@ -13,6 +13,7 @@
     "build:visualizer": "npm --prefix visualizer run build",
     "demo": "node dist/index.js",
     "serve": "node dist/server.js",
+    "test": "npm run build:server && node --test tests/**/*.test.js",
     "visualizer:dev": "npm --prefix visualizer run dev"
   },
   "keywords": [

@@ -47,7 +47,7 @@ Recorded sessions can be replayed using the saved tool registry instead of makin
 
 framefoundry turns branching into **Non-Linear Debugging**: developers can **rewind and refactor** agent reasoning by forking from any historical frame.
 
-Any selected frame can become a branch point. A fork clones the historical state up to the selected frame, tags the new branch with `branch_root_frame_id`, and then continues from there with a new prompt.
+Any selected frame can become a branch point. A fork clones the historical state up to the selected frame, tags the new branch with `branch_root_frame_id`, restores the latest recorded Git snapshot at or before that frame into a new branch, and then continues from there with a new prompt.
 
 <p align="center">
   <img src="docs/images/non-linear-debugging.svg" alt="Branching and forking from a historical frame in framefoundry" width="900">
@@ -60,9 +60,11 @@ The included React dashboard provides:
 - session navigation
 - nested branch navigation for forked sessions
 - frame timeline inspection
+- source-session compare summaries for forks and resumes
 - tool call / tool result grouping
 - raw JSON inspection
 - frame selection and forking from the UI
+- copy actions for planned branches, backup refs, and resume commands
 
 <p align="center">
   <img src="docs/images/visualizer-snapshots.svg" alt="framefoundry visualizer showing session tree and cognitive snapshots" width="900">
@@ -95,11 +97,12 @@ The SQLite layer is the foundation of the runtime.
 
 - Node.js 24+
 - npm
+- Git
 
 ### Install
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 npm install
 npm --prefix visualizer install
 ```
@@ -107,7 +110,7 @@ npm --prefix visualizer install
 ### Build
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 npm run build
 ```
 
@@ -129,7 +132,59 @@ When you do this correctly:
 1. the agent runs with **your project folder** as its working directory
 2. `davm.sqlite` is created in **your project folder**
 3. the visualizer reads that project-specific SQLite file
-4. forks and replays stay attached to that same project timeline
+4. live runs can record hidden Git checkpoints for later restore
+5. forks and replays stay attached to that same project timeline
+
+### Snapshot cadence controls
+
+Recording commands now support:
+
+- `--snapshot-mode prompt` — save a checkpoint after each completed prompt cycle
+- `--snapshot-mode assistant` — save a checkpoint after each assistant message
+- `--snapshot-mode off` — disable automatic checkpoints
+
+If you want a checkpoint on demand, you can also create one manually with the CLI:
+
+```powershell
+node dist\index.js snapshot create <sessionId>
+```
+
+### Project config file
+
+You can keep persistent defaults with your tracked project by creating `framefoundry.config.json` in the project root:
+
+```json
+{
+  "snapshotMode": "assistant",
+  "retention": {
+    "snapshotsPerSession": 25,
+    "backupsPerSession": 10
+  }
+}
+```
+
+Supported keys:
+
+- `snapshotMode` — `prompt`, `assistant`, or `off`
+- `retention.snapshotsPerSession` — how many internal snapshot refs to keep per session
+- `retention.backupsPerSession` — how many internal backup refs to keep per session
+
+CLI flags still override config values when you need a one-off run, and you can point to a different config file with `--config <path>`.
+
+### Git-backed workspace restore
+
+For Git repositories, framefoundry records internal snapshot refs under `refs/framefoundry/...` and uses them during fork.
+
+Snapshot and backup retention now happens automatically after new internal refs are created, using the active project policy.
+
+When you fork from the visualizer:
+
+1. framefoundry finds the latest recorded Git snapshot at or before the selected frame
+2. it saves the current workspace to a backup ref
+3. it restores the selected snapshot into a new Git branch
+4. it starts the forked Copilot continuation from that restored file state
+
+If the project is not in Git, or the selected frame predates recorded snapshots, framefoundry still creates the forked session but reports that workspace restore was unavailable.
 
 ### Real-project quickstart
 
@@ -138,7 +193,7 @@ When you do this correctly:
 From the framefoundry repo:
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 npm install
 npm --prefix visualizer install
 npm run build
@@ -149,7 +204,7 @@ npm run build
 From any terminal, run:
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 node dist\index.js start --project 'C:\path\to\your-project' --open
 ```
 
@@ -172,7 +227,7 @@ http://localhost:3001
 In another terminal:
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 node dist\index.js record --project 'C:\path\to\your-project' "Inspect this project and propose the next build step."
 ```
 
@@ -199,6 +254,9 @@ At the moment you must:
 - The visualizer only shows the database exposed by the currently running local app.
 - Recording still happens through framefoundry's CLI, not by auto-attaching to every Copilot session.
 - `davm start` serves the built visualizer, so you should run `npm run build` after making frontend changes.
+- File restore is only as granular as the Git checkpoints that were recorded for that session.
+- Snapshot and backup refs are internal Git refs, so you should use the provided cleanup commands rather than editing them manually.
+- Automatic retention only manages internal framefoundry refs; it does not touch your branches, tags, or normal Git history.
 
 The next natural improvement is a deeper Copilot integration that can attach to a live coding workflow with less manual launching.
 
@@ -218,6 +276,18 @@ To record against a specific project:
 node dist\index.js record --project 'C:\path\to\your-project' "Build the next feature."
 ```
 
+To use an explicit project config file:
+
+```powershell
+node dist\index.js record --project 'C:\path\to\your-project' --config 'C:\path\to\your-project\framefoundry.config.json' "Build the next feature."
+```
+
+With explicit checkpoint cadence:
+
+```powershell
+node dist\index.js record --project 'C:\path\to\your-project' --snapshot-mode assistant "Build the next feature."
+```
+
 ### Replay a session
 
 ```powershell
@@ -233,8 +303,8 @@ node dist\index.js replay --project 'C:\path\to\your-project' <sessionId>
 Example:
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
-node dist\index.js replay --project 'C:\Users\Todd\dAVM' 3289b7d4-b710-4a59-91c9-3abbadcb0300
+Set-Location 'C:\path\to\framefoundry'
+node dist\index.js replay --project 'C:\path\to\your-project' 3289b7d4-b710-4a59-91c9-3abbadcb0300
 ```
 
 What replay does:
@@ -262,6 +332,38 @@ What you should expect to see in the visualizer:
 node dist\index.js log <sessionId>
 ```
 
+### Preview a fork
+
+```powershell
+node dist\index.js fork-preview <sessionId> <frameId> --project 'C:\path\to\your-project'
+```
+
+### Fork from the CLI
+
+```powershell
+node dist\index.js fork <sessionId> <frameId> "Take this in a new direction." --project 'C:\path\to\your-project'
+```
+
+### Resume from an existing session
+
+```powershell
+node dist\index.js resume <sessionId> "Continue from here." --project 'C:\path\to\your-project'
+```
+
+### Manage internal Git refs
+
+List internal refs:
+
+```powershell
+node dist\index.js snapshot list --project 'C:\path\to\your-project'
+```
+
+Prune all but the newest matching ref:
+
+```powershell
+node dist\index.js snapshot prune --project 'C:\path\to\your-project' --kind snapshot --keep 1
+```
+
 ### Start the local app
 
 ```powershell
@@ -281,7 +383,7 @@ If you use `davm start`, you do not need a separate Vite dev server. The built v
 ### Start the API bridge manually
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 npm run serve
 ```
 
@@ -290,7 +392,7 @@ npm run serve
 In a second terminal:
 
 ```powershell
-Set-Location 'C:\Users\Todd\dAVM'
+Set-Location 'C:\path\to\framefoundry'
 npm run visualizer:dev
 ```
 
@@ -312,6 +414,10 @@ Returns all known session IDs.
 
 Returns all frames for a session ordered by sequence.
 
+### `GET /api/sessions/:id/compare`
+
+Returns the detected source session, inherited/new frame counts, and high-level divergence metrics for the selected session.
+
 ### `POST /api/sessions/:id/replay`
 
 Runs deterministic replay for a recorded session.
@@ -329,13 +435,39 @@ Request body:
 }
 ```
 
+### `GET /api/sessions/:id/fork-preview?frameId=<id>`
+
+Returns the planned branch name, latest matching snapshot, and whether workspace restore is available before a fork runs.
+
+### `POST /api/sessions/:id/resume`
+
+Starts a new continuation from the latest frame in an existing session.
+
+Request body:
+
+```json
+{
+  "newPrompt": "Continue from here."
+}
+```
+
+### `GET /api/git/refs`
+
+Lists internal framefoundry snapshot and backup refs.
+
+### `POST /api/git/refs/prune`
+
+Prunes matching internal framefoundry refs.
+
 ## Example workflow
 
 1. Record a session with the CLI.
 2. Open the visualizer and inspect the timeline.
 3. Select a frame.
-4. Click **Fork from here**.
-5. Continue the session with a new prompt.
+4. Check the fork preview to confirm the planned branch and snapshot.
+5. Click **Fork from here**.
+6. FrameFoundry restores the latest recorded Git snapshot at or before that frame into a new branch.
+7. Continue the session with a new prompt, or later use `davm resume` to keep going from the resulting session.
 
 ## Repository layout
 
@@ -343,9 +475,12 @@ Request body:
 src/
   agent.ts
   db.ts
+  git.ts
   index.ts
   replay.ts
   server.ts
+tests/
+  git.test.js
 visualizer/
   src/
 schema.sql

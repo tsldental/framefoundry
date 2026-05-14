@@ -86,6 +86,14 @@ export function SessionSidebar({
           <div className="text-[11px] uppercase tracking-[0.25em] text-cyan-300">Project</div>
           <div className="mt-1 truncate text-sm font-semibold text-white">{project.name}</div>
           <div className="mt-1 truncate text-[11px] text-slate-400">{project.projectPath}</div>
+          {project.retentionPolicy ? (
+            <div className="mt-2 text-[11px] text-slate-400">
+              Keep {project.retentionPolicy.snapshotsPerSession} snapshots / {project.retentionPolicy.backupsPerSession} backups per session
+            </div>
+          ) : null}
+          {project.configPath ? (
+            <div className="mt-1 truncate text-[11px] text-slate-500">{project.configPath}</div>
+          ) : null}
         </div>
       ) : null}
 

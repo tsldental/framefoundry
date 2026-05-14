@@ -215,15 +215,38 @@ export interface DavmRuntimeOptions {
   projectPath?: string;
   dbPath?: string;
   schemaPath?: string;
+  configPath?: string | null;
+  snapshotMode?: "prompt" | "assistant" | "off";
+  retention?: Partial<FramefoundryRetentionPolicy>;
+}
+
+export interface FramefoundryRetentionPolicy {
+  snapshotsPerSession: number;
+  backupsPerSession: number;
+}
+
+export interface FramefoundryProjectConfig {
+  snapshotMode?: "prompt" | "assistant" | "off";
+  retention?: Partial<FramefoundryRetentionPolicy>;
 }
 
 export interface DavmResolvedPaths {
   projectPath: string;
   dbPath: string;
   schemaPath: string;
+  configPath: string | null;
+  snapshotMode: NonNullable<DavmRuntimeOptions["snapshotMode"]>;
+  retentionPolicy: FramefoundryRetentionPolicy;
 }
 
 export interface FrameStoreOptions extends DavmRuntimeOptions {}
+
+const DEFAULT_RETENTION_POLICY: FramefoundryRetentionPolicy = {
+  snapshotsPerSession: 25,
+  backupsPerSession: 10,
+};
+
+const DEFAULT_CONFIG_FILENAMES = ["framefoundry.config.json", ".framefoundry.json"] as const;
 
 export interface SessionSummary {
   sessionId: string;
@@ -275,6 +298,7 @@ export class FrameStore {
   private readonly insertFrameStatement: Database.Statement;
   private readonly selectFrameStatement: Database.Statement;
   private readonly selectFramesBySessionStatement: Database.Statement;
+  private readonly updateFrameMetadataStatement: Database.Statement;
   private readonly selectSessionIdsStatement: Database.Statement;
   private readonly selectSessionsStatement: Database.Statement;
   private readonly nextSequenceStatement: Database.Statement;
@@ -354,6 +378,12 @@ export class FrameStore {
       FROM frames
       WHERE session_id = ?
       ORDER BY sequence ASC
+    `);
+
+    this.updateFrameMetadataStatement = this.db.prepare(`
+      UPDATE frames
+      SET metadata_json = @metadataJson
+      WHERE id = @frameId
     `);
 
     this.selectSessionIdsStatement = this.db.prepare(`
@@ -479,6 +509,19 @@ export class FrameStore {
   listFrames(sessionId: string): Frame[] {
     const rows = this.selectFramesBySessionStatement.all(sessionId) as FrameRow[];
     return rows.map(mapFrameRow);
+  }
+
+  updateFrameMetadata(frameId: number, metadata: JsonValue): Frame {
+    const result = this.updateFrameMetadataStatement.run({
+      frameId,
+      metadataJson: serializeJson(metadata),
+    });
+
+    if (result.changes === 0) {
+      throw new Error(`Frame ${frameId} was not found`);
+    }
+
+    return this.getFrame(frameId) as Frame;
   }
 
   listSessionIds(): string[] {
@@ -639,13 +682,19 @@ export function openFrameStore(options: FrameStoreOptions = {}): FrameStore {
 
 export function resolveDavmPaths(options: DavmRuntimeOptions = {}): DavmResolvedPaths {
   const projectPath = resolve(options.projectPath ?? process.cwd());
+  const { config, configPath } = loadProjectConfig(projectPath, options.configPath);
   const dbPath = resolve(options.dbPath ?? join(projectPath, "davm.sqlite"));
   const schemaPath = resolveSchemaPath(options.schemaPath, projectPath);
+  const snapshotMode = resolveSnapshotMode(options.snapshotMode, config.snapshotMode);
+  const retentionPolicy = resolveRetentionPolicy(options.retention, config.retention);
 
   return {
     projectPath,
     dbPath,
     schemaPath,
+    configPath,
+    snapshotMode,
+    retentionPolicy,
   };
 }
 
@@ -676,6 +725,117 @@ function resolveSchemaPath(explicitSchemaPath: string | undefined, projectPath: 
   throw new Error(
     `Could not find schema.sql. Checked ${candidatePaths.join(" and ")}. Pass --schema-path to specify it explicitly.`,
   );
+}
+
+function loadProjectConfig(
+  projectPath: string,
+  explicitConfigPath?: string | null,
+): { config: FramefoundryProjectConfig; configPath: string | null } {
+  const candidatePaths = explicitConfigPath
+    ? [resolve(explicitConfigPath)]
+    : DEFAULT_CONFIG_FILENAMES.map((fileName) => resolve(join(projectPath, fileName)));
+
+  for (const candidatePath of candidatePaths) {
+    if (!existsSync(candidatePath)) {
+      continue;
+    }
+
+    const parsed = JSON.parse(readFileSync(candidatePath, "utf8")) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`Invalid FrameFoundry config at ${candidatePath}. Expected a JSON object.`);
+    }
+
+    return {
+      config: normalizeProjectConfig(parsed as Record<string, unknown>, candidatePath),
+      configPath: candidatePath,
+    };
+  }
+
+  return {
+    config: {},
+    configPath: null,
+  };
+}
+
+function normalizeProjectConfig(
+  config: Record<string, unknown>,
+  configPath: string,
+): FramefoundryProjectConfig {
+  const snapshotMode =
+    config.snapshotMode === undefined
+      ? undefined
+      : parseSnapshotMode(config.snapshotMode, `snapshotMode in ${configPath}`);
+  const retentionInput =
+    config.retention && typeof config.retention === "object" && !Array.isArray(config.retention)
+      ? (config.retention as Record<string, unknown>)
+      : undefined;
+
+  if (config.retention !== undefined && !retentionInput) {
+    throw new Error(`Invalid retention config in ${configPath}. Expected a JSON object.`);
+  }
+
+  return {
+    snapshotMode,
+    retention: retentionInput
+      ? {
+          snapshotsPerSession: parseRetentionCount(
+            retentionInput.snapshotsPerSession,
+            `retention.snapshotsPerSession in ${configPath}`,
+          ),
+          backupsPerSession: parseRetentionCount(
+            retentionInput.backupsPerSession,
+            `retention.backupsPerSession in ${configPath}`,
+          ),
+        }
+      : undefined,
+  };
+}
+
+function resolveSnapshotMode(
+  explicitMode: DavmRuntimeOptions["snapshotMode"],
+  configuredMode: FramefoundryProjectConfig["snapshotMode"],
+): NonNullable<DavmRuntimeOptions["snapshotMode"]> {
+  return explicitMode ?? configuredMode ?? "prompt";
+}
+
+function resolveRetentionPolicy(
+  explicitRetention: DavmRuntimeOptions["retention"],
+  configuredRetention: FramefoundryProjectConfig["retention"],
+): FramefoundryRetentionPolicy {
+  return {
+    snapshotsPerSession:
+      explicitRetention?.snapshotsPerSession ??
+      configuredRetention?.snapshotsPerSession ??
+      DEFAULT_RETENTION_POLICY.snapshotsPerSession,
+    backupsPerSession:
+      explicitRetention?.backupsPerSession ??
+      configuredRetention?.backupsPerSession ??
+      DEFAULT_RETENTION_POLICY.backupsPerSession,
+  };
+}
+
+function parseSnapshotMode(
+  value: unknown,
+  label: string,
+): NonNullable<DavmRuntimeOptions["snapshotMode"]> {
+  if (value === "prompt" || value === "assistant" || value === "off") {
+    return value;
+  }
+
+  throw new Error(`Invalid ${label}. Expected "prompt", "assistant", or "off".`);
+}
+
+function parseRetentionCount(value: unknown, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isInteger(value) || Number(value) < 1) {
+    throw new Error(`Invalid ${label}. Expected an integer greater than or equal to 1.`);
+  }
+
+  return Number(value);
 }
 
 function serializeJson(value: JsonValue): string {

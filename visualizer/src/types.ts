@@ -37,6 +37,12 @@ export interface ProjectContext {
   name: string;
   projectPath: string;
   dbPath: string;
+  configPath?: string | null;
+  snapshotMode?: "prompt" | "assistant" | "off";
+  retentionPolicy?: {
+    snapshotsPerSession: number;
+    backupsPerSession: number;
+  };
 }
 
 export interface SessionsResponse {
@@ -48,6 +54,65 @@ export interface SessionsResponse {
 export interface SessionFramesResponse {
   sessionId: string;
   frames: Frame[];
+}
+
+export interface WorkspaceRestoreResult {
+  available: boolean;
+  applied: boolean;
+  repoRoot: string | null;
+  snapshotCommit: string | null;
+  snapshotRef: string | null;
+  restoredBranch: string | null;
+  backupRef: string | null;
+  snapshotFrameId: number | null;
+  reason: string | null;
+}
+
+export interface ForkPreviewResult {
+  originalSessionId: string;
+  startFrameId: number;
+  latestSnapshotFrameId: number | null;
+  restorePlan: {
+    available: boolean;
+    repoRoot: string | null;
+    plannedBranch: string | null;
+    backupRefPrefix: string | null;
+    snapshotCommit: string | null;
+    snapshotRef: string | null;
+    snapshotFrameId: number | null;
+    reason: string | null;
+  };
+}
+
+export interface ResumeResult {
+  originalSessionId: string;
+  resumedSessionId: string;
+  assistantResponse: string | null;
+  resumeCommand: string;
+  frames: Frame[];
+  registryEntries: unknown[];
+}
+
+export interface SessionCompareResult {
+  sessionId: string;
+  compareTarget: {
+    sessionId: string;
+    headline: string;
+    reason: "fork_source" | "resume_source" | "parent";
+  } | null;
+  branchRootFrameId: number | null;
+  sourceFrameId: number | null;
+  inheritedFrameCount: number;
+  newFrameCount: number;
+  currentFrameCount: number;
+  targetFrameCount: number | null;
+  currentAssistantCount: number;
+  targetAssistantCount: number | null;
+  currentToolCallCount: number;
+  targetToolCallCount: number | null;
+  currentLatestSummary: string;
+  targetLatestSummary: string | null;
+  comparisonSummary: string;
 }
 
 export interface Note {

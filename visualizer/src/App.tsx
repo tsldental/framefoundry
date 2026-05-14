@@ -1,17 +1,29 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { CopyButton } from "./components/CopyButton";
 import { ForkModal } from "./components/ForkModal";
 import { FrameTimeline } from "./components/FrameTimeline";
 import { NotesApp } from "./components/NotesApp";
+import { ResumeModal } from "./components/ResumeModal";
 import { SessionSidebar } from "./components/SessionSidebar";
 import type {
   Frame,
   ProjectContext,
+  ResumeResult,
+  SessionCompareResult,
   SessionFramesResponse,
   SessionSummary,
   SessionsResponse,
+  WorkspaceRestoreResult,
 } from "./types";
 
 type Tab = "sessions" | "notes";
+
+interface StatusNotice {
+  message: string;
+  resumeCommand?: string;
+  restoredBranch?: string;
+  backupRef?: string;
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("sessions");
@@ -19,34 +31,18 @@ function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [frames, setFrames] = useState<Frame[]>([]);
+  const [compareResult, setCompareResult] = useState<SessionCompareResult | null>(null);
   const [selectedFrameId, setSelectedFrameId] = useState<number | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [isLoadingFrames, setIsLoadingFrames] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
   const [forkFrame, setForkFrame] = useState<Frame | null>(null);
+  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const selectedSession =
     sessions.find((session) => session.sessionId === selectedSessionId) ?? null;
 
-  useEffect(() => {
-    void loadSessions();
-  }, []);
-
-  useEffect(() => {
-    const projectSuffix = project ? ` — ${project.name}` : "";
-    document.title = `framefoundry${projectSuffix}`;
-  }, [project]);
-
-  useEffect(() => {
-    if (!selectedSessionId) {
-      setFrames([]);
-      setSelectedFrameId(null);
-      return;
-    }
-
-    void loadFrames(selectedSessionId);
-  }, [selectedSessionId]);
-
-  async function loadSessions(preferredSessionId?: string) {
+  const loadSessions = useCallback(async (preferredSessionId?: string) => {
     setIsLoadingSessions(true);
     setError(null);
 
@@ -61,6 +57,13 @@ function App() {
       const normalizedSessions = normalizeSessionsResponse(payload);
       setProject(normalizeProjectContext(payload.project));
       setSessions(normalizedSessions);
+
+      if (normalizedSessions.length === 0) {
+        setFrames([]);
+        setCompareResult(null);
+        setSelectedFrameId(null);
+      }
+
       setSelectedSessionId((currentSessionId) => {
         const nextSessionId = preferredSessionId ?? currentSessionId;
 
@@ -75,9 +78,25 @@ function App() {
     } finally {
       setIsLoadingSessions(false);
     }
-  }
+  }, []);
 
-  async function loadFrames(sessionId: string) {
+  const loadCompare = useCallback(async (sessionId: string) => {
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/compare`);
+
+      if (!response.ok) {
+        setCompareResult(null);
+        return;
+      }
+
+      const payload = (await response.json()) as SessionCompareResult;
+      setCompareResult(payload);
+    } catch {
+      setCompareResult(null);
+    }
+  }, []);
+
+  const loadFrames = useCallback(async (sessionId: string) => {
     setIsLoadingFrames(true);
     setError(null);
 
@@ -90,22 +109,52 @@ function App() {
 
       const payload = (await response.json()) as SessionFramesResponse;
       setFrames(payload.frames);
+      await loadCompare(sessionId);
       setSelectedFrameId(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
+      setCompareResult(null);
     } finally {
       setIsLoadingFrames(false);
     }
-  }
+  }, [loadCompare]);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadSessions();
+    });
+  }, [loadSessions]);
+
+  useEffect(() => {
+    const projectSuffix = project ? ` — ${project.name}` : "";
+    document.title = `framefoundry${projectSuffix}`;
+  }, [project]);
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      void loadFrames(selectedSessionId);
+    });
+  }, [loadFrames, selectedSessionId]);
 
   async function forkFromFrame(frame: Frame) {
     setForkFrame(frame);
+  }
+
+  function resumeSession() {
+    if (selectedSessionId) {
+      setIsResumeModalOpen(true);
+    }
   }
 
   async function handleForkConfirm(newPrompt: string) {
     if (!selectedSessionId || !forkFrame) return;
     setForkFrame(null);
     setError(null);
+    setStatusNotice(null);
 
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(selectedSessionId)}/fork`, {
@@ -127,14 +176,56 @@ function App() {
       const payload = (await response.json()) as {
         forkSessionId: string;
         frames: Frame[];
+        workspaceRestore?: WorkspaceRestoreResult;
+        resumeCommand?: string;
       };
 
       setSelectedSessionId(payload.forkSessionId);
       setFrames(payload.frames);
       setSelectedFrameId(null);
+      setStatusNotice(formatForkStatusNotice(payload.workspaceRestore, payload.resumeCommand));
       await loadSessions(payload.forkSessionId);
     } catch (forkError) {
       setError(forkError instanceof Error ? forkError.message : String(forkError));
+    }
+  }
+
+  async function handleResumeConfirm(newPrompt: string) {
+    if (!selectedSessionId) {
+      return;
+    }
+
+    setIsResumeModalOpen(false);
+    setError(null);
+    setStatusNotice(null);
+
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(selectedSessionId)}/resume`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          newPrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? `Failed to resume session ${selectedSessionId}`);
+      }
+
+      const payload = (await response.json()) as ResumeResult;
+      setSelectedSessionId(payload.resumedSessionId);
+      setFrames(payload.frames);
+      setSelectedFrameId(null);
+      setStatusNotice({
+        message: `Resumed into session ${payload.resumedSessionId.slice(-12)}.`,
+        resumeCommand: payload.resumeCommand,
+      });
+      await loadSessions(payload.resumedSessionId);
+    } catch (resumeError) {
+      setError(resumeError instanceof Error ? resumeError.message : String(resumeError));
     }
   }
 
@@ -159,6 +250,11 @@ function App() {
                     Project
                   </span>
                   <span className="truncate">{project.name}</span>
+                  {project.snapshotMode ? (
+                    <span className="rounded-full border border-cyan-400/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.22em] text-cyan-200">
+                      {project.snapshotMode} snapshots
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -204,6 +300,37 @@ function App() {
           </div>
         ) : null}
 
+        {statusNotice ? (
+          <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{statusNotice.message}</span>
+              <div className="flex flex-wrap gap-2">
+                {statusNotice.resumeCommand ? (
+                  <CopyButton
+                    value={statusNotice.resumeCommand}
+                    label="Copy resume command"
+                    className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                  />
+                ) : null}
+                {statusNotice.restoredBranch ? (
+                  <CopyButton
+                    value={statusNotice.restoredBranch}
+                    label="Copy branch"
+                    className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                  />
+                ) : null}
+                {statusNotice.backupRef ? (
+                  <CopyButton
+                    value={statusNotice.backupRef}
+                    label="Copy backup ref"
+                    className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-500/20"
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid flex-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           {activeTab === "notes" ? (
             <div className="lg:col-span-2">
@@ -223,10 +350,12 @@ function App() {
                 sessionId={selectedSessionId}
                 session={selectedSession}
                 frames={frames}
+                compareResult={compareResult}
                 isLoading={isLoadingFrames}
                 selectedFrameId={selectedFrameId}
                 onSelectFrame={(frame) => setSelectedFrameId(frame.id)}
                 onForkFromFrame={forkFromFrame}
+                onResumeSession={resumeSession}
               />
             </>
           )}
@@ -235,9 +364,18 @@ function App() {
 
       {forkFrame ? (
         <ForkModal
+          sessionId={selectedSessionId ?? ""}
           frame={forkFrame}
           onConfirm={(prompt) => void handleForkConfirm(prompt)}
           onCancel={() => setForkFrame(null)}
+        />
+      ) : null}
+
+      {isResumeModalOpen && selectedSession ? (
+        <ResumeModal
+          sessionHeadline={selectedSession.headline}
+          onConfirm={(prompt) => void handleResumeConfirm(prompt)}
+          onCancel={() => setIsResumeModalOpen(false)}
         />
       ) : null}
     </div>
@@ -255,6 +393,17 @@ function normalizeProjectContext(project: ProjectContext | undefined): ProjectCo
     name: typeof project.name === "string" && project.name.trim() ? project.name : "unknown-project",
     projectPath: typeof project.projectPath === "string" ? project.projectPath : "",
     dbPath: typeof project.dbPath === "string" ? project.dbPath : "",
+    configPath: typeof project.configPath === "string" ? project.configPath : null,
+    snapshotMode:
+      project.snapshotMode === "assistant" || project.snapshotMode === "off"
+        ? project.snapshotMode
+        : "prompt",
+    retentionPolicy:
+      project.retentionPolicy &&
+      typeof project.retentionPolicy.snapshotsPerSession === "number" &&
+      typeof project.retentionPolicy.backupsPerSession === "number"
+        ? project.retentionPolicy
+        : undefined,
   };
 }
 
@@ -304,5 +453,38 @@ function normalizeSessionSummary(session: SessionSummary): SessionSummary {
       typeof session.latestSummary === "string" && session.latestSummary.trim()
         ? session.latestSummary
         : "No session summary available from the current API response.",
+  };
+}
+
+function formatForkStatusNotice(
+  workspaceRestore: WorkspaceRestoreResult | undefined,
+  resumeCommand?: string,
+): StatusNotice | null {
+  if (!workspaceRestore) {
+    return {
+      message: "Fork created.",
+      resumeCommand,
+    };
+  }
+
+  if (workspaceRestore.applied && workspaceRestore.restoredBranch && workspaceRestore.snapshotCommit) {
+    return {
+      message: `Fork created on branch ${workspaceRestore.restoredBranch} from Git snapshot ${workspaceRestore.snapshotCommit.slice(0, 12)}.`,
+      resumeCommand,
+      restoredBranch: workspaceRestore.restoredBranch,
+      backupRef: workspaceRestore.backupRef ?? undefined,
+    };
+  }
+
+  if (workspaceRestore.reason) {
+    return {
+      message: `Fork created without restoring files from Git: ${workspaceRestore.reason}`,
+      resumeCommand,
+    };
+  }
+
+  return {
+    message: "Fork created.",
+    resumeCommand,
   };
 }

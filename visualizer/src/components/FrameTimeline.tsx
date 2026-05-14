@@ -1,15 +1,18 @@
 import { useMemo, useState } from "react";
-import type { Frame, JsonValue, SessionSummary } from "../types";
+import { CopyButton } from "./CopyButton";
+import type { Frame, JsonValue, SessionCompareResult, SessionSummary } from "../types";
 import { formatTimestamp } from "../utils";
 
 interface FrameTimelineProps {
   sessionId: string | null;
   session: SessionSummary | null;
   frames: Frame[];
+  compareResult: SessionCompareResult | null;
   isLoading: boolean;
   selectedFrameId: number | null;
   onSelectFrame: (frame: Frame) => void;
   onForkFromFrame: (frame: Frame) => void;
+  onResumeSession: () => void;
 }
 
 interface MetricProps {
@@ -26,10 +29,12 @@ export function FrameTimeline({
   sessionId,
   session,
   frames,
+  compareResult,
   isLoading,
   selectedFrameId,
   onSelectFrame,
   onForkFromFrame,
+  onResumeSession,
 }: FrameTimelineProps) {
   const replayFrames = useMemo(
     () => frames.filter((frame) => isReplayFrame(frame.metadata)),
@@ -59,6 +64,15 @@ export function FrameTimeline({
           ) : null}
         </div>
         <div className="flex gap-3 text-xs text-slate-300">
+          {session ? (
+            <button
+              type="button"
+              onClick={onResumeSession}
+              className="rounded-full border border-violet-400/30 bg-violet-400/10 px-4 py-2 text-sm font-medium text-violet-100 transition hover:border-violet-300 hover:bg-violet-400/20"
+            >
+              Resume session
+            </button>
+          ) : null}
           <Metric label="Frames" value={frames.length} />
           <Metric label="Live" value={liveFrames.length} />
           <Metric label="Replay" value={replayFrames.length} />
@@ -67,6 +81,7 @@ export function FrameTimeline({
       </div>
 
       {session ? <SnapshotStrip session={session} /> : null}
+      {session ? <CompareStrip compareResult={compareResult} /> : null}
 
       {!sessionId ? (
         <EmptyState message="Choose a session to inspect its recorded timeline." />
@@ -115,6 +130,67 @@ export function FrameTimeline({
   );
 }
 
+function CompareStrip({ compareResult }: { compareResult: SessionCompareResult | null }) {
+  if (!compareResult) {
+    return (
+      <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/60 px-5 py-4 text-sm text-slate-400">
+        No source comparison is available for this session yet.
+      </section>
+    );
+  }
+
+  return (
+    <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-950/60 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.25em] text-violet-300">Compare View</div>
+          <p className="mt-1 text-sm text-slate-300">{compareResult.comparisonSummary}</p>
+        </div>
+        {compareResult.compareTarget ? (
+          <CopyButton
+            value={compareResult.compareTarget.sessionId}
+            label="Copy source session"
+            className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-100 transition hover:border-violet-300 hover:bg-violet-500/20"
+          />
+        ) : null}
+      </div>
+
+      {compareResult.compareTarget ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <CompareMetric
+            label="Compared to"
+            value={compareResult.compareTarget.headline}
+            detail={compareResult.compareTarget.reason.replace("_", " ")}
+          />
+          <CompareMetric
+            label="Inherited"
+            value={String(compareResult.inheritedFrameCount)}
+            detail={`${compareResult.newFrameCount} new`}
+          />
+          <CompareMetric
+            label="Assistant turns"
+            value={`${compareResult.currentAssistantCount}`}
+            detail={
+              compareResult.targetAssistantCount !== null
+                ? `${compareResult.targetAssistantCount} source`
+                : "No source count"
+            }
+          />
+          <CompareMetric
+            label="Tool calls"
+            value={`${compareResult.currentToolCallCount}`}
+            detail={
+              compareResult.targetToolCallCount !== null
+                ? `${compareResult.targetToolCallCount} source`
+                : "No source count"
+            }
+          />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function SnapshotStrip({ session }: { session: SessionSummary }) {
   return (
     <section className="mb-6 grid gap-3 xl:grid-cols-3">
@@ -130,6 +206,16 @@ function SnapshotStrip({ session }: { session: SessionSummary }) {
         accent="violet"
       />
     </section>
+  );
+}
+
+function CompareMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</div>
+      <div className="mt-1 text-base font-semibold text-white">{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{detail}</div>
+    </div>
   );
 }
 

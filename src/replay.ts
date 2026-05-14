@@ -14,6 +14,14 @@ import {
   type JsonValue,
   type ToolRegistryEntry,
 } from "./db";
+import {
+  captureGitSnapshot,
+  planForkRestore,
+  restoreGitSnapshotForFork,
+  type ForkRestorePlan,
+  type GitSnapshotMetadata,
+  type GitWorkspaceRestoreResult,
+} from "./git";
 
 const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -46,6 +54,7 @@ interface ReplaySessionState {
   promptIndex: number;
   toolCallIndex: number;
   lastReplayUserFrameId: number | null;
+  lastAssistantFrameId: number | null;
   preparedToolCalls: PreparedReplayToolCall[];
   lastSubmittedPromptSource: "replay" | "fork" | null;
 }
@@ -63,6 +72,24 @@ export interface ForkResult {
   startFrameId: number;
   forkSessionId: string;
   assistantResponse: string | null;
+  workspaceRestore: GitWorkspaceRestoreResult;
+  resumeCommand: string;
+  frames: Frame[];
+  registryEntries: ToolRegistryEntry[];
+}
+
+export interface ForkPreviewResult {
+  originalSessionId: string;
+  startFrameId: number;
+  latestSnapshotFrameId: number | null;
+  restorePlan: ForkRestorePlan;
+}
+
+export interface ResumeResult {
+  originalSessionId: string;
+  resumedSessionId: string;
+  assistantResponse: string | null;
+  resumeCommand: string;
   frames: Frame[];
   registryEntries: ToolRegistryEntry[];
 }
@@ -86,6 +113,7 @@ export async function runReplay(
     promptIndex: 0,
     toolCallIndex: 0,
     lastReplayUserFrameId: null,
+    lastAssistantFrameId: null,
     preparedToolCalls: [],
     lastSubmittedPromptSource: null,
   };
@@ -253,7 +281,7 @@ export async function runReplay(
           throw new Error("Assistant message received before the replay session ID was initialized");
         }
 
-        db.recordAgentTurn({
+        const frame = db.recordAgentTurn({
           sessionId: replaySessionId,
           role: "assistant",
           content: event.data.content,
@@ -264,6 +292,8 @@ export async function runReplay(
             eventType: event.type,
           },
         });
+
+        replayState.lastAssistantFrameId = frame.id;
       },
     });
 
@@ -357,10 +387,18 @@ export async function runFork(
 
   const forkScopeFrames = sourceFrames.filter((frame) => frame.sequence <= startFrame.sequence);
   const forkContext = buildForkContext(forkScopeFrames);
+  const snapshotForRestore = findLatestGitSnapshotAtOrBeforeFrame(forkScopeFrames);
+  const workspaceRestore = restoreGitSnapshotForFork(
+    paths,
+    originalSessionId,
+    startFrameId,
+    snapshotForRestore,
+  );
   const forkState: ReplaySessionState = {
     promptIndex: 0,
     toolCallIndex: 0,
     lastReplayUserFrameId: null,
+    lastAssistantFrameId: null,
     preparedToolCalls: [],
     lastSubmittedPromptSource: null,
   };
@@ -401,7 +439,7 @@ export async function runFork(
           if (forkState.promptIndex === 0) {
             forkState.promptIndex = 1;
             return {
-              additionalContext: `You are continuing a forked dAVM session from recorded frame ${startFrameId}. Reconstruct the state from this history before answering the new user prompt:\n\n${forkContext}`,
+              additionalContext: `${buildWorkspaceRestoreContext(workspaceRestore)}\n\nYou are continuing a forked dAVM session from recorded frame ${startFrameId}. Reconstruct the state from this history before answering the new user prompt:\n\n${forkContext}`,
             };
           }
         },
@@ -488,7 +526,7 @@ export async function runFork(
           throw new Error("Assistant message received before the fork session ID was initialized");
         }
 
-        db.recordAgentTurn({
+        const frame = db.recordAgentTurn({
           sessionId: forkSessionId,
           role: "assistant",
           content: event.data.content,
@@ -502,6 +540,17 @@ export async function runFork(
             eventType: event.type,
           },
         });
+
+        forkState.lastAssistantFrameId = frame.id;
+        recordSnapshotForFrame(
+          db,
+          paths,
+          forkSessionId,
+          paths.snapshotMode,
+          "assistant",
+          frame.id,
+          "fork assistant message",
+        );
       },
     });
 
@@ -515,6 +564,7 @@ export async function runFork(
         event: "fork_session_started",
         originalSessionId,
         startFrameId,
+        workspaceRestore: toJsonObject(workspaceRestore),
       },
       metadata: {
         is_fork: true,
@@ -529,12 +579,23 @@ export async function runFork(
       { prompt: newPrompt },
       SESSION_IDLE_TIMEOUT_MS,
     );
+    recordSnapshotForFrame(
+      db,
+      paths,
+      forkSessionId,
+      paths.snapshotMode,
+      "prompt",
+      forkState.lastAssistantFrameId ?? forkState.lastReplayUserFrameId,
+      "fork continuation",
+    );
 
     return {
       originalSessionId,
       startFrameId,
       forkSessionId,
       assistantResponse: assistantMessage?.data.content ?? null,
+      workspaceRestore,
+      resumeCommand: buildResumeCommand(paths.projectPath, forkSessionId),
       frames: db.listFrames(forkSessionId),
       registryEntries: db.listRegistryEntries(forkSessionId),
     };
@@ -562,6 +623,280 @@ export async function runFork(
 
     if (!workError && cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Failed to clean up the fork session");
+    }
+  }
+}
+
+export function getForkPreview(
+  originalSessionId: string,
+  startFrameId: number,
+  options: DavmRuntimeOptions = {},
+): ForkPreviewResult {
+  const paths = resolveDavmPaths(options);
+  const db = openFrameStore(paths);
+
+  try {
+    const sourceFrames = db.listFrames(originalSessionId);
+
+    if (sourceFrames.length === 0) {
+      throw new Error(`No recorded frames found for session "${originalSessionId}"`);
+    }
+
+    const startFrame = sourceFrames.find((frame) => frame.id === startFrameId);
+
+    if (!startFrame) {
+      throw new Error(`Frame ${startFrameId} was not found in session "${originalSessionId}"`);
+    }
+
+    const forkScopeFrames = sourceFrames.filter((frame) => frame.sequence <= startFrame.sequence);
+    const snapshotForRestore = findLatestGitSnapshotAtOrBeforeFrame(forkScopeFrames);
+
+    return {
+      originalSessionId,
+      startFrameId,
+      latestSnapshotFrameId: snapshotForRestore?.frameId ?? null,
+      restorePlan: planForkRestore(paths, originalSessionId, startFrameId, snapshotForRestore),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+export async function runResume(
+  originalSessionId: string,
+  newPrompt: string,
+  options: DavmRuntimeOptions = {},
+): Promise<ResumeResult> {
+  const paths = resolveDavmPaths(options);
+  const db = openFrameStore(paths);
+  const sourceFrames = db.listFrames(originalSessionId);
+
+  if (sourceFrames.length === 0) {
+    db.close();
+    throw new Error(`No recorded frames found for session "${originalSessionId}"`);
+  }
+
+  const lastFrame = sourceFrames.at(-1) as Frame;
+  const resumeContext = buildForkContext(sourceFrames);
+  const resumeState: ReplaySessionState = {
+    promptIndex: 0,
+    toolCallIndex: 0,
+    lastReplayUserFrameId: null,
+    lastAssistantFrameId: null,
+    preparedToolCalls: [],
+    lastSubmittedPromptSource: "fork",
+  };
+  const client = new CopilotClient({
+    cwd: paths.projectPath,
+  });
+
+  let resumedSessionId: string | undefined;
+  let session: CopilotSession | undefined;
+  let workError: unknown;
+
+  try {
+    session = await client.createSession({
+      onPermissionRequest: approveAll,
+      workingDirectory: paths.projectPath,
+      tools: [createSearchDocsTool()],
+      hooks: {
+        onUserPromptSubmitted(input, invocation) {
+          const frame = db.recordAgentTurn({
+            sessionId: invocation.sessionId,
+            role: "user",
+            content: input.prompt,
+            branchRootFrameId: lastFrame.id,
+            metadata: {
+              is_resume: true,
+              original_session_id: originalSessionId,
+              resume_source_session_id: originalSessionId,
+              resume_source_frame_id: lastFrame.id,
+              hook: "onUserPromptSubmitted",
+              cwd: input.cwd,
+              timestamp: input.timestamp,
+            },
+          });
+
+          resumeState.lastReplayUserFrameId = frame.id;
+
+          if (resumeState.promptIndex === 0) {
+            resumeState.promptIndex = 1;
+            return {
+              additionalContext: `You are resuming a dAVM session from recorded frame ${lastFrame.id}. Reconstruct the state from this history before answering the new user prompt:\n\n${resumeContext}`,
+            };
+          }
+        },
+        onPreToolUse(input, invocation) {
+          const normalizedArgs = toJsonValue(input.toolArgs);
+          const replayToolCallFrame = db.recordToolCall({
+            sessionId: invocation.sessionId,
+            toolName: input.toolName,
+            args: normalizedArgs,
+            parentFrameId: resumeState.lastReplayUserFrameId,
+            branchRootFrameId: lastFrame.id,
+            metadata: {
+              is_resume: true,
+              original_session_id: originalSessionId,
+              resume_source_session_id: originalSessionId,
+              resume_source_frame_id: lastFrame.id,
+              hook: "onPreToolUse",
+              cwd: input.cwd,
+              timestamp: input.timestamp,
+            },
+          });
+
+          if (!replayToolCallFrame.toolCallId) {
+            throw new Error(`Missing resume toolCallId for "${input.toolName}"`);
+          }
+
+          resumeState.preparedToolCalls.push({
+            replayToolCallFrameId: replayToolCallFrame.id,
+            replayToolCallId: replayToolCallFrame.toolCallId,
+            originalToolCallId: null,
+            toolName: input.toolName,
+            argsFingerprint: fingerprintValue(normalizedArgs),
+            result: null,
+            resolved: false,
+            source: "live",
+          });
+        },
+        onPostToolUse(input, invocation) {
+          const normalizedArgs = toJsonValue(input.toolArgs);
+          const preparedToolCall = findPreparedReplayToolCall(
+            resumeState,
+            input.toolName,
+            fingerprintValue(normalizedArgs),
+          );
+
+          if (!preparedToolCall) {
+            throw new Error(
+              `No prepared resume tool call found for "${input.toolName}" in session "${invocation.sessionId}"`,
+            );
+          }
+
+          db.recordToolResult({
+            sessionId: invocation.sessionId,
+            toolName: input.toolName,
+            toolCallId: preparedToolCall.replayToolCallId,
+            result: toJsonValue(input.toolResult),
+            parentFrameId: preparedToolCall.replayToolCallFrameId,
+            branchRootFrameId: lastFrame.id,
+            metadata: {
+              is_resume: true,
+              original_session_id: originalSessionId,
+              resume_source_session_id: originalSessionId,
+              resume_source_frame_id: lastFrame.id,
+              hook: "onPostToolUse",
+              cwd: input.cwd,
+              timestamp: input.timestamp,
+            },
+          });
+
+          preparedToolCall.resolved = true;
+        },
+      },
+      onEvent(event) {
+        if (event.type !== "assistant.message") {
+          return;
+        }
+
+        if (!resumedSessionId) {
+          throw new Error("Assistant message received before the resumed session ID was initialized");
+        }
+
+        const frame = db.recordAgentTurn({
+          sessionId: resumedSessionId,
+          role: "assistant",
+          content: event.data.content,
+          parentFrameId: resumeState.lastReplayUserFrameId,
+          branchRootFrameId: lastFrame.id,
+          metadata: {
+            is_resume: true,
+            original_session_id: originalSessionId,
+            resume_source_session_id: originalSessionId,
+            resume_source_frame_id: lastFrame.id,
+            eventType: event.type,
+          },
+        });
+
+        resumeState.lastAssistantFrameId = frame.id;
+        recordSnapshotForFrame(
+          db,
+          paths,
+          resumedSessionId,
+          paths.snapshotMode,
+          "assistant",
+          frame.id,
+          "resume assistant message",
+        );
+      },
+    });
+
+    resumedSessionId = session.sessionId;
+    db.recordFrame({
+      sessionId: resumedSessionId,
+      frameType: "system_event",
+      role: "system",
+      branchRootFrameId: lastFrame.id,
+      content: {
+        event: "resume_session_started",
+        originalSessionId,
+        sourceFrameId: lastFrame.id,
+      },
+      metadata: {
+        is_resume: true,
+        resume_source_session_id: originalSessionId,
+        resume_source_frame_id: lastFrame.id,
+      },
+    });
+
+    const assistantMessage = await session.sendAndWait(
+      { prompt: newPrompt },
+      SESSION_IDLE_TIMEOUT_MS,
+    );
+
+    recordSnapshotForFrame(
+      db,
+      paths,
+      resumedSessionId,
+      paths.snapshotMode,
+      "prompt",
+      resumeState.lastAssistantFrameId ?? resumeState.lastReplayUserFrameId,
+      "resume continuation",
+    );
+
+    return {
+      originalSessionId,
+      resumedSessionId,
+      assistantResponse: assistantMessage?.data.content ?? null,
+      resumeCommand: buildResumeCommand(paths.projectPath, resumedSessionId),
+      frames: db.listFrames(resumedSessionId),
+      registryEntries: db.listRegistryEntries(resumedSessionId),
+    };
+  } catch (error) {
+    workError = error;
+    throw error;
+  } finally {
+    const cleanupErrors: Error[] = [];
+
+    if (session) {
+      try {
+        await session.disconnect();
+      } catch (error) {
+        cleanupErrors.push(asError(error));
+      }
+    }
+
+    try {
+      cleanupErrors.push(...(await client.stop()));
+    } catch (error) {
+      cleanupErrors.push(asError(error));
+    }
+
+    db.close();
+
+    if (!workError && cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, "Failed to clean up the resumed session");
     }
   }
 }
@@ -884,6 +1219,127 @@ function toJsonValue(value: unknown): JsonValue {
   }
 
   return String(value);
+}
+
+function findLatestGitSnapshotAtOrBeforeFrame(
+  frames: Frame[],
+): { frameId: number; metadata: GitSnapshotMetadata } | null {
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    const snapshotMetadata = getGitSnapshotMetadata(frames[index]);
+
+    if (snapshotMetadata) {
+      return {
+        frameId: frames[index].id,
+        metadata: snapshotMetadata,
+      };
+    }
+  }
+
+  return null;
+}
+
+function getGitSnapshotMetadata(frame: Frame): GitSnapshotMetadata | null {
+  if (typeof frame.metadata !== "object" || frame.metadata === null || Array.isArray(frame.metadata)) {
+    return null;
+  }
+
+  const candidate = frame.metadata.git_snapshot;
+
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+    return null;
+  }
+
+  if (
+    typeof candidate.repoRoot !== "string" ||
+    candidate.repoRoot.length === 0 ||
+    typeof candidate.snapshotCommit !== "string" ||
+    candidate.snapshotCommit.length === 0 ||
+    typeof candidate.snapshotRef !== "string" ||
+    candidate.snapshotRef.length === 0 ||
+    typeof candidate.createdNewCommit !== "boolean" ||
+    typeof candidate.recordedAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    repoRoot: candidate.repoRoot,
+    snapshotCommit: candidate.snapshotCommit,
+    snapshotRef: candidate.snapshotRef,
+    headCommit: typeof candidate.headCommit === "string" ? candidate.headCommit : null,
+    createdNewCommit: candidate.createdNewCommit,
+    recordedAt: candidate.recordedAt,
+  };
+}
+
+function buildWorkspaceRestoreContext(workspaceRestore: GitWorkspaceRestoreResult): string {
+  if (workspaceRestore.applied && workspaceRestore.restoredBranch && workspaceRestore.snapshotCommit) {
+    return `The working tree was restored from Git snapshot ${workspaceRestore.snapshotCommit} on branch ${workspaceRestore.restoredBranch}.`;
+  }
+
+  if (workspaceRestore.reason) {
+    return `No Git workspace restore was applied before this fork. Reason: ${workspaceRestore.reason}`;
+  }
+
+  return "No Git workspace restore metadata was available for this fork.";
+}
+
+function buildResumeCommand(projectPath: string, sessionId: string): string {
+  return `node dist\\index.js resume --project ${quoteForPowerShell(projectPath)} ${sessionId} "Continue from this session."`;
+}
+
+function recordSnapshotForFrame(
+  db: ReturnType<typeof openFrameStore>,
+  paths: ReturnType<typeof resolveDavmPaths>,
+  sessionId: string,
+  snapshotMode: NonNullable<DavmRuntimeOptions["snapshotMode"]>,
+  trigger: "prompt" | "assistant",
+  frameId: number | null,
+  label: string,
+): void {
+  if (!frameId || snapshotMode === "off" || (snapshotMode === "prompt" && trigger !== "prompt")) {
+    return;
+  }
+
+  const frame = db.getFrame(frameId);
+
+  if (!frame) {
+    return;
+  }
+
+  const snapshotResult = captureGitSnapshot(paths, sessionId, frame.id, label);
+
+  if (snapshotResult.available && snapshotResult.metadata) {
+    db.updateFrameMetadata(frame.id, mergeJsonObjects(frame.metadata, {
+      git_snapshot: toJsonObject(snapshotResult.metadata),
+    }));
+  }
+}
+
+function mergeJsonObjects(left: JsonValue, right: JsonValue): JsonValue {
+  const normalizedLeft =
+    typeof left === "object" && left !== null && !Array.isArray(left) ? left : {};
+  const normalizedRight =
+    typeof right === "object" && right !== null && !Array.isArray(right) ? right : {};
+
+  return {
+    ...normalizedLeft,
+    ...normalizedRight,
+  };
+}
+
+function toJsonObject(value: object): JsonValue {
+  const normalizedObject: Record<string, JsonValue> = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    normalizedObject[key] = toJsonValue(entry);
+  }
+
+  return normalizedObject;
+}
+
+function quoteForPowerShell(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function asError(error: unknown): Error {
